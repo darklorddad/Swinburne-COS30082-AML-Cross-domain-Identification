@@ -63,16 +63,26 @@ This script extracts features from the balanced training set and the validation 
 
 **Step 3: Train the Models**
 
-*   **Train the Random Forest model:**
+*   **Option A: Train Traditional ML Models on Extracted Features**
+
+    *   **Train the Random Forest model:**
+
+        ```bash
+        python Src/train_random_forest.py --feature_dir Dataset/features/train --results_dir results/DINOv2_FeatureExtractor_RF
+        ```
+
+    *   **Train the SVM model with GridSearchCV:**
+
+        ```bash
+        python Src/train_svm_gridsearch.py --feature_dir Dataset/features/train --results_dir results/DINOv2_FeatureExtractor_SVM_GridSearch
+        ```
+
+*   **Option B: Train a Linear Probe on DINOv2**
+
+    This script trains a linear classifier on top of the frozen DINOv2 model. This is a form of transfer learning.
 
     ```bash
-    python Src/train_random_forest.py --feature_dir Dataset/features/train --results_dir results/DINOv2_FeatureExtractor_RF
-    ```
-
-*   **Train the SVM model with GridSearchCV:**
-
-    ```bash
-    python Src/train_svm_gridsearch.py --feature_dir Dataset/features/train --results_dir results/DINOv2_FeatureExtractor_SVM_GridSearch
+    python Src/train_dinov2_linear_probe.py --data_dir Dataset --results_dir results/DINOv2_Linear_Probe
     ```
 
 **Step 4: Run the Gradio Web App**

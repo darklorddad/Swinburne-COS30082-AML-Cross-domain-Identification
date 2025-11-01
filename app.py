@@ -1,48 +1,77 @@
-
 import gradio as gr
 import numpy as np
 from PIL import Image
 import joblib
+import torch
+import torch.nn as nn
+from timm.models import create_model
 from Src.feature_extractor import DinoV2FeatureExtractor
 import os
 
 # --- Configuration ---
-DEFAULT_MODEL_PATH = os.path.join("results", "DINOv2_FeatureExtractor_SVM_GridSearch", "svm_gridsearch_model.joblib")
 DEFAULT_FEATURE_DIR = os.path.join("Dataset", "features", "train")
 
-# --- Load Models ---
-def load_models(model_path):
+# --- Model Loading ---
+def load_joblib_model(model_path):
     """
-    Loads the ML model and the feature extractor.
+    Loads a scikit-learn model from a .joblib file.
     """
-    print("Loading models...")
+    print(f"Loading joblib model from {model_path}...")
     ml_model = joblib.load(model_path)
     feature_extractor = DinoV2FeatureExtractor()
-    print("Models loaded.")
+    print("Model loaded.")
     return ml_model, feature_extractor
 
-# --- Prediction Function ---
-def predict(image, ml_model, feature_extractor, class_names):
+def load_pytorch_model(model_path, num_classes):
     """
-    Predicts the class of an image.
+    Loads a PyTorch model (linear probe) and the DINOv2 backbone.
     """
-    # Save the uploaded image temporarily
+    print(f"Loading PyTorch model from {model_path}...")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # Load DINOv2 backbone
+    dino_model = create_model('dinov2_vitb14_reg', pretrained=True, num_classes=0).to(device)
+    dino_model.eval()
+
+    # Load the trained linear classifier
+    classifier = nn.Linear(dino_model.embed_dim, num_classes)
+    classifier.load_state_dict(torch.load(model_path, map_location=device))
+    classifier.to(device)
+    classifier.eval()
+
+    print("PyTorch model loaded.")
+    return dino_model, classifier
+
+# --- Prediction Functions ---
+def predict_joblib(image, ml_model, feature_extractor, class_names):
+    """
+    Predicts using the joblib-loaded model.
+    """
     image_path = "temp_image.jpg"
     image.save(image_path)
-
-    # Extract features
     features = feature_extractor.extract_features(image_path)
-
-    # Predict probabilities
-    probabilities = ml_model.predict_proba(features.reshape(1, -1))[0]
-
-    # Get top 5 predictions
-    top5_indices = np.argsort(probabilities)[-5:][::-1]
-    top5_predictions = {class_names[i]: float(probabilities[i]) for i in top5_indices}
-
-    # Clean up the temporary image file
     os.remove(image_path)
 
+    probabilities = ml_model.predict_proba(features.reshape(1, -1))[0]
+    top5_indices = np.argsort(probabilities)[-5:][::-1]
+    top5_predictions = {class_names[i]: float(probabilities[i]) for i in top5_indices}
+    return top5_predictions
+
+def predict_pytorch(image, dino_model, classifier, class_names):
+    """
+    Predicts using the PyTorch model.
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    transform = create_transform(**resolve_data_config(dino_model.default_cfg))
+    image_tensor = transform(image).unsqueeze(0).to(device)
+
+    with torch.no_grad():
+        features = dino_model(image_tensor)
+        outputs = classifier(features)
+        probabilities = torch.nn.functional.softmax(outputs, dim=1)[0]
+
+    top5_indices = torch.argsort(probabilities, descending=True)[:5]
+    top5_predictions = {class_names[i]: float(probabilities[i]) for i in top5_indices}
     return top5_predictions
 
 # --- Gradio Interface ---
@@ -50,23 +79,30 @@ def create_gradio_app(model_paths):
     """
     Creates the Gradio web application.
     """
-    # Load class names from the feature directory structure
     try:
         class_names = sorted(os.listdir(DEFAULT_FEATURE_DIR))
+        num_classes = len(class_names)
     except FileNotFoundError:
         print(f"Error: Feature directory not found at {DEFAULT_FEATURE_DIR}")
-        print("Please run the feature extraction script first.")
-        class_names = ["class_1", "class_2", "class_3", "class_4", "class_5"] # Placeholder
+        class_names = [f"class_{i}" for i in range(100)] # Placeholder
+        num_classes = len(class_names)
 
     def gradio_predict_wrapper(model_choice, image):
-        model_path = model_paths[model_choice]
-        ml_model, feature_extractor = load_models(model_path)
-        return predict(image, ml_model, feature_extractor, class_names)
+        model_info = model_paths[model_choice]
+        model_path = model_info["path"]
+        model_type = model_info["type"]
 
-    # Define the model choices for the dropdown
+        if model_type == "joblib":
+            ml_model, feature_extractor = load_joblib_model(model_path)
+            return predict_joblib(image, ml_model, feature_extractor, class_names)
+        elif model_type == "pytorch":
+            dino_model, classifier = load_pytorch_model(model_path, num_classes)
+            return predict_pytorch(image, dino_model, classifier, class_names)
+        else:
+            raise ValueError(f"Unknown model type: {model_type}")
+
     model_choices = list(model_paths.keys())
 
-    # Create the Gradio interface
     iface = gr.Interface(
         fn=gradio_predict_wrapper,
         inputs=[
@@ -75,22 +111,28 @@ def create_gradio_app(model_paths):
         ],
         outputs=gr.Label(num_top_classes=5, label="Top 5 Predictions"),
         title="Cross-Domain Plant Identification",
-        description="Upload an image of a plant to classify it using a DINOv2 feature extractor and a machine learning model.",
+        description="Upload an image of a plant to classify it.",
         examples=[
             [model_choices[0], "./Dataset/validation/105951/0ce1c2b5630236a87218a399a0336842.jpg"],
-            [model_choices[0], "./Dataset/validation/12254/0a6548a656b34a659a0963b3693d4836.jpg"],
         ]
     )
     return iface
 
 if __name__ == "__main__":
-    # --- Define Model Paths ---
-    # This dictionary allows you to add more models to the dropdown easily
     model_paths = {
-        "DINOv2 + SVM (GridSearch)": os.path.join("results", "DINOv2_FeatureExtractor_SVM_GridSearch", "svm_gridsearch_model.joblib"),
-        "DINOv2 + Random Forest": os.path.join("results", "DINOv2_FeatureExtractor_RF", "random_forest_model.joblib"),
+        "DINOv2 Linear Probe": {
+            "path": os.path.join("results", "DINOv2_Linear_Probe", "dinov2_linear_probe.pth"),
+            "type": "pytorch"
+        },
+        "DINOv2 + SVM (GridSearch)": {
+            "path": os.path.join("results", "DINOv2_FeatureExtractor_SVM_GridSearch", "svm_gridsearch_model.joblib"),
+            "type": "joblib"
+        },
+        "DINOv2 + Random Forest": {
+            "path": os.path.join("results", "DINOv2_FeatureExtractor_RF", "random_forest_model.joblib"),
+            "type": "joblib"
+        },
     }
 
-    # Create and launch the Gradio app
     app = create_gradio_app(model_paths)
     app.launch(share=True)
