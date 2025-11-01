@@ -1,0 +1,9 @@
+torch
+torchvision
+timm
+scikit-learn
+joblib
+tqdm
+gradio
+numpy
+Pillow
