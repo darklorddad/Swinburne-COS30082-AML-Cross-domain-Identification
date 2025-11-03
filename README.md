@@ -5,6 +5,16 @@ This repository implements Baseline Approach 2 for cross-domain plant species id
 1. **Approach A (Feature Extraction)**: DINOv2 as frozen feature extractor + traditional ML classifiers
 2. **Approach B (Fine-Tuning)**: Full fine-tuning of DINOv2 models for maximum accuracy
 
+## ⚠️ Important Note: Image Size
+
+**DINOv2 models use 518×518 pixel images (not 224×224).** This is the default in all scripts, but requires more GPU memory:
+
+- **Memory Impact**: 518×518 images use ~5.5x more memory than 224×224
+- **Recommended Batch Sizes**:
+  - ImageNet Small/Base: `--batch_size 16` (reduce to 8 if OOM)
+  - ImageNet Large: `--batch_size 8` (reduce to 4 if OOM)
+- **If you get "Input height (224) doesn't match model (518)" error**: The script has been updated to use 518×518 by default. Make sure you're using the latest version.
+
 ## 📁 Project Structure
 
  Baseline-Approach_2/

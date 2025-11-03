@@ -21,36 +21,37 @@ python Src/data_exploration.py
 
 ## Step 1: Extract Features
 
-Extract features from all 4 DINOv2 variants:
+Extract features from all 4 DINOv2 variants.
+
+**Important Note:** DINOv2 models use **518×518 images** (not 224×224). This is now the default, but requires more GPU memory. Adjust `--batch_size` based on your GPU memory.
 
 ### ImageNet Small
+```bash
+# Recommended: batch_size 16 (use 8 if CUDA out of memory)
+python Approach_A_Feature_Extraction/extract_features.py --model_type imagenet_small --batch_size 16
+```
+
+**Or with explicit paths:**
 ```bash
 python Approach_A_Feature_Extraction/extract_features.py \
     --model_type imagenet_small \
     --train_dir Dataset/balanced_train \
     --val_dir Dataset/validation \
     --test_dir Dataset/test \
-    --batch_size 32
+    --batch_size 16 \
+    --image_size 518
 ```
 
 ### ImageNet Base
 ```bash
-python Approach_A_Feature_Extraction/extract_features.py \
-    --model_type imagenet_base \
-    --train_dir Dataset/balanced_train \
-    --val_dir Dataset/validation \
-    --test_dir Dataset/test \
-    --batch_size 32
+# Recommended: batch_size 16 (use 8 if CUDA out of memory)
+python Approach_A_Feature_Extraction/extract_features.py --model_type imagenet_base --batch_size 16
 ```
 
 ### ImageNet Large
 ```bash
-python Approach_A_Feature_Extraction/extract_features.py \
-    --model_type imagenet_large \
-    --train_dir Dataset/balanced_train \
-    --val_dir Dataset/validation \
-    --test_dir Dataset/test \
-    --batch_size 16
+# Recommended: batch_size 8 (use 4 if CUDA out of memory)
+python Approach_A_Feature_Extraction/extract_features.py --model_type imagenet_large --batch_size 8
 ```
 
 ### Plant-Pretrained Base (after downloading PlantCLEF model)
@@ -63,13 +64,17 @@ mkdir -p Models/pretrained
 python Approach_A_Feature_Extraction/extract_features.py \
     --model_type plant_pretrained_base \
     --plant_model_path Models/pretrained/model_best.pth.tar \
-    --train_dir Dataset/balanced_train \
-    --val_dir Dataset/validation \
-    --test_dir Dataset/test \
-    --batch_size 32
+    --batch_size 16
 ```
 
 **Output**: Features saved to `Approach_A_Feature_Extraction/features/<model_type>/`
+
+**Memory Usage Notes:**
+- 518×518 images use ~5.5x more memory than 224×224
+- Recommended batch sizes for GPU with 8GB+ VRAM:
+  - Small/Base: 16 (reduce to 8 if OOM)
+  - Large: 8 (reduce to 4 if OOM)
+- For CPU or low memory: Use `--batch_size 4` or `--batch_size 2`
 
 ## Step 2: Train Classifiers
 

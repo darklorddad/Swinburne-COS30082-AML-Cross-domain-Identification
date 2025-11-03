@@ -1,0 +1,9 @@
+{
+    "model_type": "imagenet_small",
+    "feature_dim": 384,
+    "image_size": 518,
+    "batch_size": 16,
+    "train_samples": 16000,
+    "val_samples": 4000,
+    "test_samples": 207
+}

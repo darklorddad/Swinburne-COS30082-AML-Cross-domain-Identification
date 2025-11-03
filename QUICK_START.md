@@ -35,23 +35,28 @@ python Src/data_exploration.py
 
 ### A1. Extract Features
 
-Extract features from 4 DINOv2 variants:
+Extract features from 4 DINOv2 variants.
+
+**Important:** DINOv2 uses **518×518 images** (default). Adjust batch size based on your GPU memory.
 
 ```bash
-# ImageNet Small
-python Approach_A_Feature_Extraction/extract_features.py --model_type imagenet_small
+# ImageNet Small (batch_size 16 recommended)
+python Approach_A_Feature_Extraction/extract_features.py --model_type imagenet_small --batch_size 16
 
-# ImageNet Base
-python Approach_A_Feature_Extraction/extract_features.py --model_type imagenet_base
+# ImageNet Base (batch_size 16 recommended)
+python Approach_A_Feature_Extraction/extract_features.py --model_type imagenet_base --batch_size 16
 
-# ImageNet Large (reduce batch size if OOM)
-python Approach_A_Feature_Extraction/extract_features.py --model_type imagenet_large --batch_size 16
+# ImageNet Large (batch_size 8 recommended, use 4 if OOM)
+python Approach_A_Feature_Extraction/extract_features.py --model_type imagenet_large --batch_size 8
 
 # Plant-pretrained Base (after downloading PlantCLEF model)
 python Approach_A_Feature_Extraction/extract_features.py \
     --model_type plant_pretrained_base \
-    --plant_model_path Models/pretrained/model_best.pth.tar
+    --plant_model_path Models/pretrained/model_best.pth.tar \
+    --batch_size 16
 ```
+
+**If CUDA Out of Memory:** Reduce batch size (16→8→4→2)
 
 ### A2. Train Classifiers
 
@@ -245,13 +250,29 @@ Baseline-Approach_2/
 
 ## 🚨 Troubleshooting
 
+### "Input height (224) doesn't match model (518)" Error
+- **Solution**: DINOv2 uses 518×518 images (now the default)
+- The script has been updated to use `--image_size 518` by default
+- You don't need to specify it manually anymore
+
+### CUDA Out of Memory during feature extraction
+- **Solution**: Reduce batch size progressively
+  ```bash
+  # Try these in order until it works:
+  --batch_size 16  # First try
+  --batch_size 8   # If still fails
+  --batch_size 4   # If still fails
+  --batch_size 2   # Last resort
+  ```
+- 518×518 images use **~5.5x more memory** than 224×224
+
 ### "No trained models found" in app.py
 - Train at least one model first using Approach A or B scripts
 - Check that model files exist in the expected directories
 
 ### Feature extraction is slow
 - Use GPU: Models will automatically use CUDA if available
-- Reduce image size: `--image_size 224` (default)
+- Expected time: 5-10 min with GPU, 30-60 min with CPU per model
 
 ### SVM/RF training takes forever
 - Use `--n_jobs -1` to parallelize across all CPU cores
@@ -261,7 +282,7 @@ Baseline-Approach_2/
 ### Fine-tuning crashes with CUDA OOM
 - Reduce `--batch_size` to 16 or 8
 - Use smaller model: `imagenet_small` instead of `large`
-- Enable gradient checkpointing (advanced)
+- Reduce `--image_size` to 224 (not recommended, but works)
 
 ---
 

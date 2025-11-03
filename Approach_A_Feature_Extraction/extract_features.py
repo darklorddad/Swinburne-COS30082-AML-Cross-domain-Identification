@@ -53,8 +53,8 @@ def parse_args():
                         help='Output directory for features')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='Batch size for feature extraction')
-    parser.add_argument('--image_size', type=int, default=224,
-                        help='Input image size')
+    parser.add_argument('--image_size', type=int, default=518,
+                        help='Input image size (DINOv2 uses 518x518)')
     parser.add_argument('--plant_model_path', type=str, default='Models/pretrained/model_best.pth.tar',
                         help='Path to plant-pretrained model checkpoint')
     return parser.parse_args()
