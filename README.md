@@ -1,9 +1,11 @@
-Comprehensive Implementation Plan: Baseline-Approach_2
+# Baseline Approach 2: DINOv2 for Cross-Domain Plant Identification
 
- DINOv2 for Cross-Domain Plant Identification
+This repository implements Baseline Approach 2 for cross-domain plant species identification using DINOv2 models. The project compares plant-pretrained vs ImageNet-pretrained DINOv2 models using two methodologies:
 
- ---
- 📁 Project Structure
+1. **Approach A (Feature Extraction)**: DINOv2 as frozen feature extractor + traditional ML classifiers
+2. **Approach B (Fine-Tuning)**: Full fine-tuning of DINOv2 models for maximum accuracy
+
+## 📁 Project Structure
 
  Baseline-Approach_2/
  ├── Src/
