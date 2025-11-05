@@ -83,7 +83,7 @@ def parse_args():
                         help='Output directory (default: Approach_B_Fine_Tuning/Models/<model_type>)')
     parser.add_argument('--epochs', type=int, default=60)
     parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--image_size', type=int, default=224)
+    parser.add_argument('--image_size', type=int, default=518)
     parser.add_argument('--lr_head', type=float, default=1e-3)
     parser.add_argument('--lr_backbone', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=0.05)
