@@ -166,17 +166,15 @@ class TrainingOrchestrator:
         ]
 
         try:
-            # Run extraction with UTF-8 encoding to handle emojis
+            # Run extraction with real-time output so user can see progress
             env = os.environ.copy()
             env['PYTHONIOENCODING'] = 'utf-8'
 
             result = subprocess.run(
                 cmd,
                 cwd=str(self.project_root),
-                capture_output=True,
+                capture_output=False,  # Show output in real-time
                 text=True,
-                encoding='utf-8',
-                errors='replace',
                 env=env
             )
 
@@ -184,14 +182,13 @@ class TrainingOrchestrator:
                 feature_state['status'] = 'completed'
                 feature_state['error'] = None
                 self._save_state()
-                print(f"✅ Features extracted successfully for {extractor}")
+                print(f"\n✅ Features extracted successfully for {extractor}")
                 return True
             else:
                 feature_state['status'] = 'failed'
-                feature_state['error'] = result.stderr[-500:]  # Last 500 chars
+                feature_state['error'] = "Feature extraction failed - check output above"
                 self._save_state()
-                print(f"❌ Feature extraction failed for {extractor}")
-                print(f"Error: {result.stderr[-200:]}")
+                print(f"\n❌ Feature extraction failed for {extractor}")
                 return False
 
         except Exception as e:
