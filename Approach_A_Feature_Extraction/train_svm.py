@@ -31,12 +31,20 @@ def parse_args():
     parser.add_argument('--output_dir', type=str, required=True,
                         help='Output directory for trained model')
 
-    parser.add_argument('--n_jobs', type=int, default=-1,
+    # Windows with Python 3.13 has multiprocessing issues, use n_jobs=1 by default
+    default_n_jobs = 1 if sys.platform == 'win32' else -1
+    parser.add_argument('--n_jobs', type=int, default=default_n_jobs,
                         help='Number of parallel jobs for GridSearch (-1 = all CPUs, 1 = sequential)')
     parser.add_argument('--cv_folds', type=int, default=3,
                         help='Number of cross-validation folds')
 
     args = parser.parse_args()
+
+    # Warn if using parallel processing on Windows
+    if sys.platform == 'win32' and args.n_jobs != 1:
+        print(f"\n⚠️  WARNING: n_jobs={args.n_jobs} may cause errors on Windows with Python 3.13")
+        print(f"   Recommended: n_jobs=1 for stability")
+        print(f"   Will attempt parallel processing but may fallback to sequential if it fails...\n")
 
     return args
 
@@ -111,9 +119,29 @@ def train_svm(X_train, y_train, n_jobs=-1, cv_folds=3):
     print(f"   Total combinations: {len(param_grid['C']) * len(param_grid['gamma']) * len(param_grid['kernel'])}")
     print(f"   Using {n_jobs} parallel jobs")
 
-    # Train
+    # Train with automatic fallback for Windows multiprocessing issues
     start_time = time.time()
-    grid_search.fit(X_train, y_train)
+    try:
+        # Try with requested parallel processing
+        grid_search.fit(X_train, y_train)
+    except (ModuleNotFoundError, OSError, RuntimeError) as e:
+        # If multiprocessing fails on Windows, fallback to sequential
+        if 'posixsubprocess' in str(e) or 'multiprocessing' in str(e) or '_posix' in str(e):
+            print(f"\n❌ Multiprocessing failed: {str(e)[:80]}...")
+            print(f"⚙️  Falling back to sequential processing (n_jobs=1)...\n")
+            # Recreate GridSearch with n_jobs=1
+            grid_search = GridSearchCV(
+                estimator=svm,
+                param_grid=param_grid,
+                cv=cv_folds,
+                n_jobs=1,  # Sequential - works on all platforms
+                verbose=2,
+                scoring='accuracy',
+                return_train_score=True
+            )
+            grid_search.fit(X_train, y_train)
+        else:
+            raise  # Re-raise if it's a different error
     training_time = time.time() - start_time
 
     print(f"\n✅ Training complete in {training_time:.2f} seconds")
@@ -132,15 +160,18 @@ def evaluate_svm(model, X_val, y_val):
     # Predict
     y_pred = model.predict(X_val)
 
+    # Predict probabilities (for Top-K accuracy and other visualizations)
+    y_pred_proba = model.predict_proba(X_val)
+
     # Calculate accuracy
     accuracy = accuracy_score(y_val, y_pred)
 
     print(f"   ✅ Validation Accuracy: {accuracy:.4f} ({accuracy*100:.2f}%)")
 
-    return accuracy, y_pred
+    return accuracy, y_pred, y_pred_proba
 
 
-def save_model_and_results(grid_search, output_dir, training_time, val_accuracy, y_val, y_pred):
+def save_model_and_results(grid_search, output_dir, training_time, val_accuracy, y_val, y_pred, y_pred_proba, features_dir):
     """Save trained model and results"""
     os.makedirs(output_dir, exist_ok=True)
 
@@ -174,12 +205,32 @@ def save_model_and_results(grid_search, output_dir, training_time, val_accuracy,
         json.dump(config, f, indent=4)
     print(f"   ✅ Config saved: {config_path}")
 
-    # Generate classification report
+    # Get class names from dataset
     num_classes = len(np.unique(y_val))
+    class_names = [f"Class_{i}" for i in range(num_classes)]
+
+    # Try to load actual class names from dataset
+    try:
+        dataset_dir = os.path.join(os.path.dirname(features_dir), '..', 'Dataset', 'balanced_train')
+        if os.path.exists(dataset_dir):
+            actual_class_names = sorted([d for d in os.listdir(dataset_dir)
+                                        if os.path.isdir(os.path.join(dataset_dir, d))])
+            if len(actual_class_names) == num_classes:
+                class_names = actual_class_names
+    except:
+        pass  # Use default Class_0, Class_1, etc.
+
+    # Save class names
+    class_names_path = os.path.join(output_dir, 'class_names.json')
+    with open(class_names_path, 'w') as f:
+        json.dump(class_names, f, indent=2)
+    print(f"   ✅ Class names saved: {class_names_path}")
+
+    # Generate classification report
     report = classification_report(
         y_val,
         y_pred,
-        target_names=[f"Class_{i}" for i in range(num_classes)],
+        target_names=class_names,
         digits=4,
         zero_division=0
     )
@@ -202,6 +253,19 @@ def save_model_and_results(grid_search, output_dir, training_time, val_accuracy,
     np.save(predictions_path, y_pred)
     print(f"   ✅ Predictions saved: {predictions_path}")
 
+    # Save prediction probabilities
+    proba_path = os.path.join(output_dir, 'val_predictions_proba.npy')
+    np.save(proba_path, y_pred_proba)
+    print(f"   ✅ Prediction probabilities saved: {proba_path}")
+
+    # Generate visualizations
+    print(f"\n📊 Generating visualizations...")
+    try:
+        from visualize_classifier import generate_all_visualizations
+        generate_all_visualizations(output_dir, features_dir, classifier_type='svm')
+    except Exception as e:
+        print(f"   ⚠️  Warning: Could not generate visualizations: {e}")
+
 
 def main():
     args = parse_args()
@@ -217,10 +281,10 @@ def main():
     grid_search, training_time = train_svm(X_train, y_train, args.n_jobs, args.cv_folds)
 
     # Evaluate on validation set
-    val_accuracy, y_pred = evaluate_svm(grid_search.best_estimator_, X_val, y_val)
+    val_accuracy, y_pred, y_pred_proba = evaluate_svm(grid_search.best_estimator_, X_val, y_val)
 
     # Save model and results
-    save_model_and_results(grid_search, args.output_dir, training_time, val_accuracy, y_val, y_pred)
+    save_model_and_results(grid_search, args.output_dir, training_time, val_accuracy, y_val, y_pred, y_pred_proba, args.features_dir)
 
     print("\n" + "=" * 70)
     print("✨ SVM TRAINING COMPLETE!")

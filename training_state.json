@@ -1,5 +1,5 @@
 {
-  "last_updated": "2025-11-06T14:24:14.529569",
+  "last_updated": "2025-11-06T20:34:33.859655",
   "approach_a": {
     "features": {
       "plant_pretrained_base": {
@@ -25,14 +25,14 @@
     },
     "models": {
       "plant_pretrained_base_svm": {
-        "status": "failed",
-        "last_run": "2025-11-06T14:22:38.558690",
-        "error": "Classifier training failed - check output above",
+        "status": "completed",
+        "last_run": "2025-11-06T15:11:44.292207",
+        "error": null,
         "metrics": {}
       },
       "plant_pretrained_base_random_forest": {
-        "status": "failed",
-        "last_run": "2025-11-06T14:22:41.153155",
+        "status": "in_progress",
+        "last_run": "2025-11-06T18:19:02.228336",
         "error": "Classifier training failed - check output above",
         "metrics": {}
       },
@@ -61,8 +61,8 @@
         "metrics": {}
       },
       "imagenet_base_svm": {
-        "status": "failed",
-        "last_run": "2025-11-06T14:24:11.401332",
+        "status": "in_progress",
+        "last_run": "2025-11-06T14:34:08.418657",
         "error": "Classifier training failed - check output above",
         "metrics": {}
       },
@@ -93,6 +93,30 @@
       "imagenet_large_linear_probe": {
         "status": "completed",
         "last_run": "2025-11-06T06:07:42.073502",
+        "error": null,
+        "metrics": {}
+      },
+      "plant_pretrained_base_logistic_regression": {
+        "status": "pending",
+        "last_run": null,
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_small_logistic_regression": {
+        "status": "pending",
+        "last_run": null,
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_base_logistic_regression": {
+        "status": "pending",
+        "last_run": null,
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_large_logistic_regression": {
+        "status": "pending",
+        "last_run": null,
         "error": null,
         "metrics": {}
       }

@@ -28,7 +28,7 @@ class TrainingOrchestrator:
     # Model configurations
     FEATURE_EXTRACTORS = ['plant_pretrained_base', 'imagenet_small', 'imagenet_base', 'imagenet_large']
 
-    CLASSIFIERS = ['svm', 'random_forest', 'linear_probe']
+    CLASSIFIERS = ['svm', 'random_forest', 'linear_probe', 'logistic_regression']
 
     FINETUNE_MODELS = ['plant_pretrained_base', 'imagenet_small', 'imagenet_base', 'imagenet_large']
 
@@ -42,7 +42,10 @@ class TrainingOrchestrator:
         """Load training state from JSON file"""
         if self.state_file.exists():
             with open(self.state_file, 'r') as f:
-                return json.load(f)
+                state = json.load(f)
+            # Update state with any new models that were added
+            state = self._update_state_for_new_models(state)
+            return state
         else:
             # Initialize new state
             return self._initialize_state()
@@ -89,6 +92,54 @@ class TrainingOrchestrator:
             }
 
         self._save_state(state)
+        return state
+
+    def _update_state_for_new_models(self, state: Dict) -> Dict:
+        """
+        Update existing state to include any new models that were added.
+        This handles cases where new classifiers are added to CLASSIFIERS list.
+        """
+        updated = False
+
+        # Ensure all feature extractors are in state
+        for extractor in self.FEATURE_EXTRACTORS:
+            if extractor not in state['approach_a']['features']:
+                state['approach_a']['features'][extractor] = {
+                    'status': 'pending',
+                    'last_run': None,
+                    'error': None
+                }
+                updated = True
+
+        # Ensure all classifier combinations are in state
+        for extractor in self.FEATURE_EXTRACTORS:
+            for classifier in self.CLASSIFIERS:
+                model_id = f"{extractor}_{classifier}"
+                if model_id not in state['approach_a']['models']:
+                    state['approach_a']['models'][model_id] = {
+                        'status': 'pending',
+                        'last_run': None,
+                        'error': None,
+                        'metrics': {}
+                    }
+                    updated = True
+
+        # Ensure all Approach B models are in state
+        for model in self.FINETUNE_MODELS:
+            if model not in state['approach_b']['models']:
+                state['approach_b']['models'][model] = {
+                    'status': 'pending',
+                    'last_run': None,
+                    'error': None,
+                    'metrics': {}
+                }
+                updated = True
+
+        # Save if we made updates
+        if updated:
+            self._save_state(state)
+            print(f"✅ Updated training state with {sum([1 for e in self.FEATURE_EXTRACTORS for c in self.CLASSIFIERS]) - (len(state['approach_a']['models']) - sum([1 for e in self.FEATURE_EXTRACTORS for c in self.CLASSIFIERS if f'{e}_{c}' in state['approach_a']['models']]))} new model entries")
+
         return state
 
     def _save_state(self, state: Optional[Dict] = None):
@@ -243,7 +294,8 @@ class TrainingOrchestrator:
         script_map = {
             'svm': 'train_svm.py',
             'random_forest': 'train_random_forest.py',
-            'linear_probe': 'train_linear_probe.py'
+            'linear_probe': 'train_linear_probe.py',
+            'logistic_regression': 'train_logistic_regression.py'
         }
 
         script_path = self.project_root / "Approach_A_Feature_Extraction" / script_map[classifier]
@@ -259,8 +311,8 @@ class TrainingOrchestrator:
             '--output_dir', str(output_dir)
         ]
 
-        # Add n_jobs parameter for SVM and Random Forest
-        if classifier in ['svm', 'random_forest']:
+        # Add n_jobs parameter for SVM, Random Forest, and Logistic Regression
+        if classifier in ['svm', 'random_forest', 'logistic_regression']:
             cmd.extend(['--n_jobs', str(n_jobs)])
 
         try:

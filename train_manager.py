@@ -83,11 +83,12 @@ class TrainingManager:
         print("  3. Run Full Pipeline (All 16 Models)")
         print("  4. View Detailed Status")
         print("  5. Generate Comparison Report")
-        print("  6. Reset Model Status")
+        print("  6. Generate Visualizations")
+        print("  7. Reset Model Status")
         print("  0. Exit")
         print()
 
-        choice = input("Select option (0-6): ").strip()
+        choice = input("Select option (0-7): ").strip()
 
         if choice == '1':
             self.approach_a_menu()
@@ -100,6 +101,8 @@ class TrainingManager:
         elif choice == '5':
             self.generate_reports()
         elif choice == '6':
+            self.visualization_menu()
+        elif choice == '7':
             self.reset_status_menu()
         elif choice == '0':
             self.running = False
@@ -307,49 +310,85 @@ class TrainingManager:
     def _get_n_jobs_from_user(self) -> int:
         """
         Interactively ask user for n_jobs parameter.
+        On Windows, defaults to 1 core due to Python 3.13 multiprocessing limitations.
 
         Returns:
             int: Number of parallel jobs (1 for sequential, -1 for all CPUs)
         """
         import multiprocessing
         cpu_count = multiprocessing.cpu_count()
+        is_windows = sys.platform == 'win32'
 
         print(f"\n⚙️  Configure Parallel Processing")
         print(f"   Your CPU has {cpu_count} cores")
+
+        # Show Windows warning if applicable
+        if is_windows:
+            print(f"   ⚠️  Note: Python 3.13 on Windows has limited multiprocessing support")
+            print(f"   ⚠️  Parallel processing may fail - use option 1 for guaranteed stability")
+
         print(f"   Options:")
-        print(f"      [1] Use 1 core (slowest, most stable)")
-        print(f"      [2] Use {cpu_count // 2} cores (balanced)")
-        print(f"      [3] Use ALL {cpu_count} cores (fastest)")
+        if is_windows:
+            print(f"      [1] Use 1 core (RECOMMENDED - 100% stable)")
+            print(f"      [2] Use {cpu_count // 2} cores (experimental, may fallback to 1 core)")
+            print(f"      [3] Use ALL {cpu_count} cores (experimental, may fallback to 1 core)")
+        else:
+            print(f"      [1] Use 1 core (slowest, most stable)")
+            print(f"      [2] Use {cpu_count // 2} cores (balanced)")
+            print(f"      [3] Use ALL {cpu_count} cores (fastest)")
         print(f"      [4] Custom (enter specific number)")
         print()
 
-        choice = input(f"Select option (1-4) [default: 3]: ").strip()
+        # Default to 1 on Windows, all cores on other platforms
+        default_option = '1' if is_windows else '3'
+        default_cores = 1 if is_windows else -1
 
-        if not choice or choice == '3':  # Default to all cores
-            print(f"   ✓ Using all {cpu_count} cores")
-            return -1
+        choice = input(f"Select option (1-4) [default: {default_option}]: ").strip()
+
+        if not choice:  # Use default based on platform
+            if is_windows:
+                print(f"   ✓ Using 1 core (sequential - recommended for Windows)")
+            else:
+                print(f"   ✓ Using all {cpu_count} cores")
+            return default_cores
         elif choice == '1':
             print(f"   ✓ Using 1 core (sequential)")
             return 1
         elif choice == '2':
             cores = max(1, cpu_count // 2)
-            print(f"   ✓ Using {cores} cores")
+            if is_windows:
+                print(f"   ⚠️  Attempting {cores} cores (may fallback to 1 if multiprocessing fails)")
+            else:
+                print(f"   ✓ Using {cores} cores")
             return cores
+        elif choice == '3':
+            if is_windows:
+                print(f"   ⚠️  Attempting all {cpu_count} cores (may fallback to 1 if multiprocessing fails)")
+            else:
+                print(f"   ✓ Using all {cpu_count} cores")
+            return -1
         elif choice == '4':
             while True:
                 custom = input(f"   Enter number of cores (1-{cpu_count}): ").strip()
                 try:
                     n_jobs = int(custom)
                     if 1 <= n_jobs <= cpu_count:
-                        print(f"   ✓ Using {n_jobs} cores")
+                        if is_windows and n_jobs > 1:
+                            print(f"   ⚠️  Attempting {n_jobs} cores (may fallback to 1 if multiprocessing fails)")
+                        else:
+                            print(f"   ✓ Using {n_jobs} cores")
                         return n_jobs
                     else:
                         print(f"   ❌ Invalid. Enter 1-{cpu_count}")
                 except ValueError:
                     print("   ❌ Invalid input. Enter a number.")
         else:
-            print(f"   Invalid choice. Using default (all {cpu_count} cores)")
-            return -1
+            if is_windows:
+                print(f"   Invalid choice. Using default (1 core - recommended for Windows)")
+                return 1
+            else:
+                print(f"   Invalid choice. Using default (all {cpu_count} cores)")
+                return -1
 
     def run_all_approach_a(self):
         """Run all Approach A models"""
@@ -817,6 +856,189 @@ class TrainingManager:
             input("Press Enter to continue...")
         elif choice == '0':
             return
+
+    def visualization_menu(self):
+        """Visualization generation menu"""
+        self.clear_screen()
+        self.print_header("GENERATE VISUALIZATIONS")
+
+        print("VISUALIZATION OPTIONS:")
+        print("  1. Generate for single model")
+        print("  2. Generate for all trained models")
+        print("  3. Generate for specific extractor (all classifiers)")
+        print("  0. Back to Main Menu")
+        print()
+
+        choice = input("Select option (0-3): ").strip()
+
+        if choice == '1':
+            self.generate_visualization_single()
+        elif choice == '2':
+            self.generate_visualization_all()
+        elif choice == '3':
+            self.generate_visualization_by_extractor()
+        elif choice == '0':
+            return
+        else:
+            input("\n❌ Invalid option. Press Enter to continue...")
+            self.visualization_menu()
+
+    def generate_visualization_single(self):
+        """Generate visualizations for a single model"""
+        self.clear_screen()
+        self.print_header("GENERATE VISUALIZATIONS - SINGLE MODEL")
+
+        # Get list of trained models
+        results_dir = Path("Approach_A_Feature_Extraction/results")
+        if not results_dir.exists():
+            print("❌ No results directory found. Train some models first!")
+            input("\nPress Enter to continue...")
+            return
+
+        model_dirs = [d for d in results_dir.iterdir() if d.is_dir()]
+        if not model_dirs:
+            print("❌ No trained models found in results directory!")
+            input("\nPress Enter to continue...")
+            return
+
+        # Display available models
+        print("Available trained models:\n")
+        for i, model_dir in enumerate(model_dirs, 1):
+            # Check if visualizations exist
+            viz_dir = model_dir / "visualizations"
+            viz_exists = " [visualizations exist]" if viz_dir.exists() else ""
+            print(f"  {i}. {model_dir.name}{viz_exists}")
+
+        print("\n  0. Back")
+        print()
+
+        try:
+            choice = input("Select model (0-{0}): ".format(len(model_dirs))).strip()
+            if choice == '0':
+                return
+
+            idx = int(choice) - 1
+            if 0 <= idx < len(model_dirs):
+                model_dir = model_dirs[idx]
+
+                # Infer classifier type and feature extractor
+                from Approach_A_Feature_Extraction.generate_visualizations import infer_classifier_type, infer_feature_extractor
+
+                classifier_type = infer_classifier_type(model_dir.name)
+                feature_extractor = infer_feature_extractor(model_dir.name)
+
+                if feature_extractor is None:
+                    print(f"\n❌ Could not infer feature extractor from {model_dir.name}")
+                    input("Press Enter to continue...")
+                    return
+
+                features_dir = Path(f"Approach_A_Feature_Extraction/features/{feature_extractor}")
+
+                print(f"\nGenerating visualizations for: {model_dir.name}")
+                print(f"Classifier type: {classifier_type}")
+                print(f"Feature extractor: {feature_extractor}")
+                print()
+
+                try:
+                    from Approach_A_Feature_Extraction.visualize_classifier import generate_all_visualizations
+                    viz_paths = generate_all_visualizations(str(model_dir), str(features_dir), classifier_type)
+
+                    print(f"\n✅ Generated {len(viz_paths)} visualizations!")
+                    print(f"Saved in: {model_dir / 'visualizations'}")
+
+                except Exception as e:
+                    print(f"\n❌ Error generating visualizations: {e}")
+
+                input("\nPress Enter to continue...")
+            else:
+                print("\n❌ Invalid selection")
+                input("Press Enter to continue...")
+        except ValueError:
+            print("\n❌ Invalid input")
+            input("Press Enter to continue...")
+
+    def generate_visualization_all(self):
+        """Generate visualizations for all trained models"""
+        self.clear_screen()
+        self.print_header("GENERATE VISUALIZATIONS - ALL MODELS")
+
+        print("⚙️  This will generate visualizations for ALL trained models.")
+        print("This may take several minutes depending on the number of models.\n")
+
+        confirm = input("Continue? (y/N): ").strip().lower()
+        if confirm != 'y':
+            return
+
+        print("\n📊 Generating visualizations...\n")
+
+        try:
+            from Approach_A_Feature_Extraction.generate_visualizations import generate_for_all_models
+            generate_for_all_models("Approach_A_Feature_Extraction/results",
+                                   "Approach_A_Feature_Extraction/features")
+        except Exception as e:
+            print(f"\n❌ Error: {e}")
+
+        input("\nPress Enter to continue...")
+
+    def generate_visualization_by_extractor(self):
+        """Generate visualizations for all classifiers of a specific extractor"""
+        self.clear_screen()
+        self.print_header("GENERATE VISUALIZATIONS - BY EXTRACTOR")
+
+        extractors = self.orchestrator.FEATURE_EXTRACTORS
+
+        print("Select Feature Extractor:\n")
+        for i, extractor in enumerate(extractors, 1):
+            print(f"  {i}. {extractor}")
+        print("\n  0. Back")
+        print()
+
+        try:
+            choice = input(f"Select extractor (0-{len(extractors)}): ").strip()
+            if choice == '0':
+                return
+
+            idx = int(choice) - 1
+            if 0 <= idx < len(extractors):
+                extractor = extractors[idx]
+                features_dir = Path(f"Approach_A_Feature_Extraction/features/{extractor}")
+
+                if not features_dir.exists():
+                    print(f"\n❌ Features not extracted for {extractor}")
+                    input("Press Enter to continue...")
+                    return
+
+                print(f"\nGenerating visualizations for all {extractor} classifiers...")
+                print()
+
+                results_dir = Path("Approach_A_Feature_Extraction/results")
+                successful = 0
+                failed = 0
+
+                for classifier in self.orchestrator.CLASSIFIERS:
+                    model_dir = results_dir / f"{classifier}_{extractor}"
+
+                    if not model_dir.exists():
+                        print(f"   ⚠️  {classifier}_{extractor} - not trained, skipping")
+                        continue
+
+                    try:
+                        from Approach_A_Feature_Extraction.visualize_classifier import generate_all_visualizations
+                        viz_paths = generate_all_visualizations(str(model_dir), str(features_dir), classifier)
+                        print(f"   ✅ {classifier}_{extractor} - {len(viz_paths)} visualizations")
+                        successful += 1
+                    except Exception as e:
+                        print(f"   ❌ {classifier}_{extractor} - Error: {e}")
+                        failed += 1
+
+                print(f"\n✅ Complete! Successful: {successful}, Failed: {failed}")
+                input("\nPress Enter to continue...")
+            else:
+                print("\n❌ Invalid selection")
+                input("Press Enter to continue...")
+        except ValueError:
+            print("\n❌ Invalid input")
+            input("Press Enter to continue...")
 
     def run(self):
         """Main run loop"""
