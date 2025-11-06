@@ -1,5 +1,5 @@
 {
-  "last_updated": "2025-11-06T10:09:21.735881",
+  "last_updated": "2025-11-06T14:07:07.282810",
   "approach_a": {
     "features": {
       "plant_pretrained_base": {
@@ -43,14 +43,14 @@
         "metrics": {}
       },
       "imagenet_small_svm": {
-        "status": "in_progress",
+        "status": "completed",
         "last_run": "2025-11-06T10:09:21.735837",
         "error": null,
         "metrics": {}
       },
       "imagenet_small_random_forest": {
-        "status": "pending",
-        "last_run": "2025-11-06T06:06:07.545829",
+        "status": "in_progress",
+        "last_run": "2025-11-06T12:00:49.954269",
         "error": null,
         "metrics": {}
       },
@@ -107,9 +107,9 @@
         "metrics": {}
       },
       "imagenet_small": {
-        "status": "in_progress",
-        "last_run": "2025-11-06T09:25:27.837815",
-        "error": "Check console output for details",
+        "status": "completed",
+        "last_run": "2025-11-06T12:50:13.772702",
+        "error": null,
         "metrics": {}
       },
       "imagenet_base": {
