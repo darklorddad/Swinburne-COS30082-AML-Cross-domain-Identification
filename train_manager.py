@@ -239,6 +239,23 @@ class TrainingManager:
 
             force = False
 
+            # Step 3: Configure n_jobs for SVM/Random Forest
+            n_jobs = -1  # Default
+            if classifier_choice == '4':
+                # Training all three - ask for n_jobs once
+                print("\nSome classifiers (SVM, Random Forest) support parallel processing.")
+                n_jobs = self._get_n_jobs_from_user()
+            else:
+                # Single classifier - check if it needs n_jobs
+                try:
+                    classifier_idx = int(classifier_choice) - 1
+                    if 0 <= classifier_idx < len(classifiers):
+                        classifier = classifiers[classifier_idx]
+                        if classifier in ['svm', 'random_forest']:
+                            n_jobs = self._get_n_jobs_from_user()
+                except ValueError:
+                    pass  # Will be caught later
+
             if classifier_choice == '4':
                 # Train all three
                 print(f"\n🔄 Training all classifiers for {extractor}...")
@@ -251,7 +268,7 @@ class TrainingManager:
                     print(f"\n{'='*60}")
                     print(f"Training {classifier}...")
                     print('='*60)
-                    self.orchestrator.train_classifier(extractor, classifier, force=force)
+                    self.orchestrator.train_classifier(extractor, classifier, force=force, n_jobs=n_jobs)
 
                 input("\n✅ All classifiers trained! Press Enter to continue...")
                 self.approach_a_menu()
@@ -271,7 +288,7 @@ class TrainingManager:
                             return
 
                     print(f"\n🔄 Training {classifier} on {extractor} features...")
-                    success = self.orchestrator.train_classifier(extractor, classifier, force=force)
+                    success = self.orchestrator.train_classifier(extractor, classifier, force=force, n_jobs=n_jobs)
 
                     if success:
                         input("\n✅ Training complete! Press Enter to continue...")
@@ -286,6 +303,53 @@ class TrainingManager:
         except ValueError:
             input("\n❌ Invalid input. Press Enter to continue...")
             self.train_classifier_menu()
+
+    def _get_n_jobs_from_user(self) -> int:
+        """
+        Interactively ask user for n_jobs parameter.
+
+        Returns:
+            int: Number of parallel jobs (1 for sequential, -1 for all CPUs)
+        """
+        import multiprocessing
+        cpu_count = multiprocessing.cpu_count()
+
+        print(f"\n⚙️  Configure Parallel Processing")
+        print(f"   Your CPU has {cpu_count} cores")
+        print(f"   Options:")
+        print(f"      [1] Use 1 core (slowest, most stable)")
+        print(f"      [2] Use {cpu_count // 2} cores (balanced)")
+        print(f"      [3] Use ALL {cpu_count} cores (fastest)")
+        print(f"      [4] Custom (enter specific number)")
+        print()
+
+        choice = input(f"Select option (1-4) [default: 3]: ").strip()
+
+        if not choice or choice == '3':  # Default to all cores
+            print(f"   ✓ Using all {cpu_count} cores")
+            return -1
+        elif choice == '1':
+            print(f"   ✓ Using 1 core (sequential)")
+            return 1
+        elif choice == '2':
+            cores = max(1, cpu_count // 2)
+            print(f"   ✓ Using {cores} cores")
+            return cores
+        elif choice == '4':
+            while True:
+                custom = input(f"   Enter number of cores (1-{cpu_count}): ").strip()
+                try:
+                    n_jobs = int(custom)
+                    if 1 <= n_jobs <= cpu_count:
+                        print(f"   ✓ Using {n_jobs} cores")
+                        return n_jobs
+                    else:
+                        print(f"   ❌ Invalid. Enter 1-{cpu_count}")
+                except ValueError:
+                    print("   ❌ Invalid input. Enter a number.")
+        else:
+            print(f"   Invalid choice. Using default (all {cpu_count} cores)")
+            return -1
 
     def run_all_approach_a(self):
         """Run all Approach A models"""
@@ -303,8 +367,12 @@ class TrainingManager:
         confirm = input("Continue? (y/N): ").strip().lower()
 
         if confirm == 'y':
+            # Configure parallel processing
+            print("\nSome classifiers (SVM, Random Forest) support parallel processing.")
+            n_jobs = self._get_n_jobs_from_user()
+
             print("\n🚀 Starting Approach A full pipeline...\n")
-            results = self.orchestrator.train_approach_a_full()
+            results = self.orchestrator.train_approach_a_full(n_jobs=n_jobs)
 
             print(f"\n{'='*70}")
             print(f"RESULTS:")
@@ -375,10 +443,15 @@ class TrainingManager:
             confirm = input("Continue? (y/N): ").strip().lower()
 
             if confirm == 'y':
+                # Configure parallel processing
+                print("\nSome classifiers (SVM, Random Forest) support parallel processing.")
+                n_jobs = self._get_n_jobs_from_user()
+
                 print("\n🚀 Starting custom batch training...\n")
                 results = self.orchestrator.train_approach_a_full(
                     extractors=selected_extractors,
-                    classifiers=selected_classifiers
+                    classifiers=selected_classifiers,
+                    n_jobs=n_jobs
                 )
 
                 print(f"\n{'='*70}")
@@ -600,13 +673,17 @@ class TrainingManager:
         confirm = input("Continue? (y/N): ").strip().lower()
 
         if confirm == 'y':
+            # Configure parallel processing for Approach A
+            print("\nSome classifiers (SVM, Random Forest) support parallel processing.")
+            n_jobs = self._get_n_jobs_from_user()
+
             print("\n🚀 Starting FULL PIPELINE...\n")
 
             # Run Approach A
             print("\n" + "="*70)
             print("PHASE 1: APPROACH A")
             print("="*70 + "\n")
-            a_results = self.orchestrator.train_approach_a_full()
+            a_results = self.orchestrator.train_approach_a_full(n_jobs=n_jobs)
 
             # Run Approach B
             print("\n" + "="*70)

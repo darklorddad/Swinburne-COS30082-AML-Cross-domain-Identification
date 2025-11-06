@@ -198,7 +198,7 @@ class TrainingOrchestrator:
             print(f"❌ Exception during feature extraction: {e}")
             return False
 
-    def train_classifier(self, extractor: str, classifier: str, force: bool = False) -> bool:
+    def train_classifier(self, extractor: str, classifier: str, force: bool = False, n_jobs: int = -1) -> bool:
         """
         Train a classifier on extracted features
 
@@ -206,6 +206,7 @@ class TrainingOrchestrator:
             extractor: Feature extractor used
             classifier: Classifier type (svm, random_forest, linear_probe)
             force: Retrain even if already completed
+            n_jobs: Number of parallel jobs for SVM/Random Forest (-1 = all CPUs)
 
         Returns:
             True if successful, False otherwise
@@ -257,6 +258,10 @@ class TrainingOrchestrator:
             '--features_dir', str(features_dir),
             '--output_dir', str(output_dir)
         ]
+
+        # Add n_jobs parameter for SVM and Random Forest
+        if classifier in ['svm', 'random_forest']:
+            cmd.extend(['--n_jobs', str(n_jobs)])
 
         try:
             # Run training with real-time output so user can see progress
@@ -364,13 +369,15 @@ class TrainingOrchestrator:
             return False
 
     def train_approach_a_full(self, extractors: Optional[List[str]] = None,
-                             classifiers: Optional[List[str]] = None) -> Dict:
+                             classifiers: Optional[List[str]] = None,
+                             n_jobs: int = -1) -> Dict:
         """
         Train multiple Approach A models
 
         Args:
             extractors: List of extractors to use (None = all)
             classifiers: List of classifiers to train (None = all)
+            n_jobs: Number of parallel jobs for SVM/Random Forest (-1 = all CPUs)
 
         Returns:
             Dictionary with success/failure counts
@@ -401,7 +408,7 @@ class TrainingOrchestrator:
         print("-" * 60)
         for extractor in extractors:
             for classifier in classifiers:
-                success = self.train_classifier(extractor, classifier)
+                success = self.train_classifier(extractor, classifier, n_jobs=n_jobs)
                 if success:
                     results['successful'] += 1
                 else:

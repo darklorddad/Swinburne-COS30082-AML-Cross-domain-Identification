@@ -31,19 +31,12 @@ def parse_args():
     parser.add_argument('--output_dir', type=str, required=True,
                         help='Output directory for trained model')
 
-    # Windows with Python 3.13 has multiprocessing issues, use n_jobs=1 by default
-    default_n_jobs = 1 if sys.platform == 'win32' else -1
-    parser.add_argument('--n_jobs', type=int, default=default_n_jobs,
+    parser.add_argument('--n_jobs', type=int, default=-1,
                         help='Number of parallel jobs for GridSearch (-1 = all CPUs, 1 = sequential)')
     parser.add_argument('--cv_folds', type=int, default=3,
                         help='Number of cross-validation folds')
 
     args = parser.parse_args()
-
-    # Warn if using parallel processing on Windows
-    if sys.platform == 'win32' and args.n_jobs != 1:
-        print(f"⚠️  Warning: n_jobs={args.n_jobs} may cause issues on Windows. Using n_jobs=1 for compatibility.")
-        args.n_jobs = 1
 
     return args
 
