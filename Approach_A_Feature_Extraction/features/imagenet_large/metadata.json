@@ -2,7 +2,7 @@
     "model_type": "imagenet_large",
     "feature_dim": 1024,
     "image_size": 518,
-    "batch_size": 8,
+    "batch_size": 32,
     "train_samples": 16000,
     "val_samples": 4000,
     "test_samples": 207
