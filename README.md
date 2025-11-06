@@ -65,7 +65,10 @@ Swinburne-COS30082-AML-Cross-Domain-Identification/
 │   ├── train_linear_probe.py            # Train linear classifier
 │   ├── train_svm.py                     # Train SVM classifier
 │   ├── train_random_forest.py           # Train Random Forest
+│   ├── train_logistic_regression.py    # Train Logistic Regression
 │   ├── evaluate_classifiers.py          # Evaluate all Approach A models
+│   ├── visualize_classifier.py          # Visualization generation module
+│   ├── generate_visualizations.py       # Standalone visualization script
 │   ├── features/                        # Extracted features storage
 │   └── results/                         # Trained models and metrics
 │
@@ -170,24 +173,26 @@ Dataset/
    - Models: `plant_pretrained_base`, `imagenet_small`, `imagenet_base`, `imagenet_large`
    - Output: 384-1024 dimensional feature vectors
 
-2. **Classifier Training** (3 classifiers per extractor = 12 models)
+2. **Classifier Training** (4 classifiers per extractor = 16 models)
    - Linear Probe: Simple linear layer (5-15 min)
+   - Logistic Regression: L2 regularization with GridSearchCV (10-20 min)
    - SVM: RBF kernel with GridSearchCV (10-30 min)
    - Random Forest: 100-500 trees with tuning (20-60 min)
 
-#### Total Models: 12
-- 4 feature extractors × 3 classifiers
+#### Total Models: 16
+- 4 feature extractors × 4 classifiers
 
 #### Expected Performance
 - Linear Probe: 79-89% accuracy
-- SVM: 78-88% accuracy
+- Logistic Regression: 77-88% accuracy (fastest baseline)
+- SVM: 78-88% accuracy (**⭐ Best result: 99.80%** on plant_pretrained_base)
 - Random Forest: 76-86% accuracy
-- Best: Plant-pretrained + Linear Probe (83-89%)
+- Best: Plant-pretrained + SVM (99.80%)
 
 #### Training Time
 - Feature extraction: 15-30 min per model
 - Classifier training: 5-60 min per model
-- **Total**: 6-10 hours for all 12 models
+- **Total**: 7-11 hours for all 16 models
 
 ---
 
@@ -278,6 +283,11 @@ python Approach_A_Feature_Extraction/extract_features.py --model_type imagenet_l
 python Approach_A_Feature_Extraction/train_linear_probe.py \
     --features_dir Approach_A_Feature_Extraction/features/plant_pretrained_base \
     --output_dir Approach_A_Feature_Extraction/results/linear_probe_plant_pretrained_base
+
+# Train Logistic Regression (fast baseline)
+python Approach_A_Feature_Extraction/train_logistic_regression.py \
+    --features_dir Approach_A_Feature_Extraction/features/plant_pretrained_base \
+    --output_dir Approach_A_Feature_Extraction/results/logistic_regression_plant_pretrained_base
 
 # Train SVM
 python Approach_A_Feature_Extraction/train_svm.py \
@@ -407,8 +417,9 @@ python app.py
 ### Model Auto-Discovery
 
 The app automatically discovers all trained models:
-- Approach A: 12 models (feature extraction + classifiers)
+- Approach A: 16 models (feature extraction + classifiers)
 - Approach B: 4 models (fine-tuned variants)
+- **Total**: 20 models
 
 ---
 
@@ -436,6 +447,91 @@ Output: `Approach_A_evaluation_results.json` and `.csv`
 python Approach_B_Fine_Tuning/evaluate_all_models.py
 ```
 Output: `Approach_B_evaluation_results.json` and `.csv`
+
+---
+
+## Visualizations
+
+All trained models automatically generate comprehensive visualizations for analysis and publication.
+
+### Available Visualizations
+
+#### 1. **Confusion Matrix** (100×100 heatmap)
+- Shows classification performance across all 100 species
+- Normalized by true labels
+- Color-coded for easy identification of confusion patterns
+- Publication-ready 20×18 inch format
+
+#### 2. **Per-Class Accuracy** (bar chart)
+- Individual accuracy for each plant species
+- Color-coded: red (low) to green (high)
+- Sorted by performance
+- Shows mean ± std statistics
+
+#### 3. **Top-K Accuracy** (comparison plot)
+- Top-1, Top-3, Top-5, Top-10 accuracy bars
+- Shows how often correct class appears in top predictions
+- Useful for understanding model confidence
+
+#### 4. **Precision-Recall Curves**
+- PR curves for 20 representative classes
+- Average Precision (AP) scores
+- Mean AP across all classes
+- Helps assess precision/recall trade-offs
+
+#### 5. **Feature t-SNE Visualization**
+- 2D projection of 768D DINOv2 features
+- Color-coded by species
+- Shows feature space separability
+- Computed on 2,000 validation samples
+
+#### 6. **GridSearch Heatmap** (SVM, RF, LR only)
+- Parameter performance visualization
+- Shows CV accuracy for each hyperparameter combination
+- Helps understand parameter importance
+
+### Generation Methods
+
+**Automatic** (during training):
+- All visualizations are generated automatically when training completes
+- Saved in: `results/{model_name}/visualizations/`
+
+**Manual** (after training):
+```bash
+# Option 1: Use interactive menu
+python train_manager.py
+# → Main Menu → 6. Generate Visualizations
+
+# Option 2: Command line for single model
+python Approach_A_Feature_Extraction/generate_visualizations.py \
+    --model_dir results/svm_plant_pretrained_base \
+    --features_dir features/plant_pretrained_base \
+    --classifier_type svm
+
+# Option 3: Batch generate for all models
+python Approach_A_Feature_Extraction/generate_visualizations.py --all_models
+```
+
+### Output Structure
+
+```
+results/
+└── svm_plant_pretrained_base/
+    ├── best_model.joblib
+    ├── training_config.json
+    ├── class_names.json
+    ├── val_predictions.npy
+    ├── val_predictions_proba.npy
+    └── visualizations/                      ← Generated visualizations
+        ├── confusion_matrix.png
+        ├── per_class_accuracy.png
+        ├── topk_accuracy.png
+        ├── precision_recall_curves.png
+        ├── feature_tsne_visualization.png
+        └── gridsearch_heatmap.png
+```
+
+---
 
 ### Results Location
 

@@ -1,16 +1,78 @@
-*.zip
-*.pth
+# Python
 *.pyc
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# Large Dataset Files (2.9 GB total - MUST EXCLUDE)
+Dataset/train/
+Dataset/balanced_train/
+Dataset/validation/
+Dataset/test/
+
+# Keep small metadata files in Dataset/list/
+!Dataset/list/
+
+# Large Feature Files (228 MB)
+Approach_A_Feature_Extraction/features/
+
+# Large Model Checkpoints
+*.pth
+Approach_B_Fine_Tuning/Models/**/*.pth
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Documents
+Documents/
 *.pdf
 *.docx
 *.doc
 *.odt
 *.rtf
-*.txt
-Documents/
-results/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Only exclude dataset images (NOT visualization PNGs!)
+Dataset/**/*.jpg
+Dataset/**/*.jpeg
+Dataset/**/*.png
+Dataset/**/*.gif
+Dataset/**/*.bmp
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Logs
+*.log
+logs/
+
+# Allow important .txt files
+!requirements.txt
+!Dataset/list/*.txt
+!classes.txt
+
+# Temporary files
+*.tmp
+*.temp
