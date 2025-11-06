@@ -1,5 +1,5 @@
 {
-  "last_updated": "2025-11-06T14:07:07.282810",
+  "last_updated": "2025-11-06T14:24:14.529569",
   "approach_a": {
     "features": {
       "plant_pretrained_base": {
@@ -25,15 +25,15 @@
     },
     "models": {
       "plant_pretrained_base_svm": {
-        "status": "in_progress",
-        "last_run": "2025-11-06T09:44:37.536106",
-        "error": null,
+        "status": "failed",
+        "last_run": "2025-11-06T14:22:38.558690",
+        "error": "Classifier training failed - check output above",
         "metrics": {}
       },
       "plant_pretrained_base_random_forest": {
-        "status": "pending",
-        "last_run": "2025-11-06T06:05:22.663203",
-        "error": null,
+        "status": "failed",
+        "last_run": "2025-11-06T14:22:41.153155",
+        "error": "Classifier training failed - check output above",
         "metrics": {}
       },
       "plant_pretrained_base_linear_probe": {
@@ -61,15 +61,15 @@
         "metrics": {}
       },
       "imagenet_base_svm": {
-        "status": "pending",
-        "last_run": "2025-11-06T06:07:01.155740",
-        "error": null,
+        "status": "failed",
+        "last_run": "2025-11-06T14:24:11.401332",
+        "error": "Classifier training failed - check output above",
         "metrics": {}
       },
       "imagenet_base_random_forest": {
-        "status": "pending",
-        "last_run": "2025-11-06T06:07:02.873557",
-        "error": null,
+        "status": "failed",
+        "last_run": "2025-11-06T14:24:12.962796",
+        "error": "Classifier training failed - check output above",
         "metrics": {}
       },
       "imagenet_base_linear_probe": {
