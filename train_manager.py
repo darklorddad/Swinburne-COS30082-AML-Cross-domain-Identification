@@ -141,7 +141,7 @@ class TrainingManager:
         self.clear_screen()
         self.print_header("EXTRACT FEATURES")
 
-        extractors = list(self.orchestrator.FEATURE_EXTRACTORS.keys())
+        extractors = self.orchestrator.FEATURE_EXTRACTORS
 
         print("Select Feature Extractor:")
         for i, extractor in enumerate(extractors, 1):
@@ -195,7 +195,7 @@ class TrainingManager:
         self.print_header("TRAIN CLASSIFIER")
 
         # Step 1: Select extractor
-        extractors = list(self.orchestrator.FEATURE_EXTRACTORS.keys())
+        extractors = self.orchestrator.FEATURE_EXTRACTORS
         print("Step 1: Select Feature Extractor")
         for i, extractor in enumerate(extractors, 1):
             feature_status = self.orchestrator.state['approach_a']['features'][extractor]['status']
@@ -322,7 +322,7 @@ class TrainingManager:
         self.print_header("CUSTOM APPROACH A BATCH")
 
         # Select extractors
-        extractors = list(self.orchestrator.FEATURE_EXTRACTORS.keys())
+        extractors = self.orchestrator.FEATURE_EXTRACTORS
         print("Select Feature Extractors (comma-separated, e.g., 1,3):")
         for i, extractor in enumerate(extractors, 1):
             print(f"  {i}. {extractor}")

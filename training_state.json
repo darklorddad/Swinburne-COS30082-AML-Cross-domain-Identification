@@ -1,5 +1,5 @@
 {
-  "last_updated": "2025-11-06T09:25:27.837841",
+  "last_updated": "2025-11-06T09:35:49.744734",
   "approach_a": {
     "features": {
       "plant_pretrained_base": {
@@ -43,8 +43,8 @@
         "metrics": {}
       },
       "imagenet_small_svm": {
-        "status": "pending",
-        "last_run": "2025-11-06T06:06:05.970861",
+        "status": "in_progress",
+        "last_run": "2025-11-06T09:35:49.744696",
         "error": null,
         "metrics": {}
       },
