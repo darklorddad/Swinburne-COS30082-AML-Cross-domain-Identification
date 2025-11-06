@@ -259,17 +259,15 @@ class TrainingOrchestrator:
         ]
 
         try:
-            # Run training with UTF-8 encoding to handle emojis
+            # Run training with real-time output so user can see progress
             env = os.environ.copy()
             env['PYTHONIOENCODING'] = 'utf-8'
 
             result = subprocess.run(
                 cmd,
                 cwd=str(self.project_root),
-                capture_output=True,
+                capture_output=False,  # Show output in real-time
                 text=True,
-                encoding='utf-8',
-                errors='replace',
                 env=env
             )
 
@@ -277,14 +275,13 @@ class TrainingOrchestrator:
                 model_state['status'] = 'completed'
                 model_state['error'] = None
                 self._save_state()
-                print(f"✅ Model {model_id} trained successfully")
+                print(f"\n✅ Model {model_id} trained successfully")
                 return True
             else:
                 model_state['status'] = 'failed'
-                model_state['error'] = result.stderr[-500:]
+                model_state['error'] = "Classifier training failed - check output above"
                 self._save_state()
-                print(f"❌ Training failed for {model_id}")
-                print(f"Error: {result.stderr[-200:]}")
+                print(f"\n❌ Training failed for {model_id}")
                 return False
 
         except Exception as e:
