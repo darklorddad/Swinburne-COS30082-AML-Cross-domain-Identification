@@ -23,6 +23,11 @@ Dataset/test/
 # Large Feature Files (228 MB)
 Approach_A_Feature_Extraction/features/
 
+# Training Results (models, plots, metrics)
+results/
+Approach_A_Feature_Extraction/results/
+Approach_B_Fine_Tuning/Models/
+
 # Large Model Checkpoints
 *.pth
 Approach_B_Fine_Tuning/Models/**/*.pth
