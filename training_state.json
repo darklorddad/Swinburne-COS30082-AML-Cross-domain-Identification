@@ -1,122 +1,122 @@
 {
-  "last_updated": "2025-11-09T08:48:56.688469",
+  "last_updated": "2025-11-11T18:27:42.549461",
   "approach_a": {
     "features": {
       "plant_pretrained_base": {
         "status": "completed",
-        "last_run": "2025-11-06T03:38:36.482348",
+        "last_run": "2025-11-09T13:07:13.287591",
         "error": null
       },
       "imagenet_small": {
         "status": "completed",
-        "last_run": "2025-11-06T04:05:50.884741",
+        "last_run": "2025-11-09T12:29:03.746539",
         "error": null
       },
       "imagenet_base": {
         "status": "completed",
-        "last_run": "2025-11-06T04:16:44.430932",
+        "last_run": "2025-11-09T12:40:02.810383",
         "error": null
       },
       "imagenet_large": {
         "status": "completed",
-        "last_run": "2025-11-06T04:43:55.833503",
+        "last_run": "2025-11-10T01:10:33.717017",
         "error": null
       }
     },
     "models": {
       "plant_pretrained_base_svm": {
         "status": "completed",
-        "last_run": "2025-11-06T15:11:44.292207",
+        "last_run": "2025-11-10T02:45:40.801338",
         "error": null,
         "metrics": {}
       },
       "plant_pretrained_base_random_forest": {
-        "status": "in_progress",
-        "last_run": "2025-11-07T07:26:27.134005",
-        "error": "Classifier training failed - check output above",
+        "status": "pending",
+        "last_run": null,
+        "error": null,
         "metrics": {}
       },
       "plant_pretrained_base_linear_probe": {
         "status": "completed",
-        "last_run": "2025-11-06T06:05:25.857940",
+        "last_run": "2025-11-10T02:43:01.153250",
+        "error": null,
+        "metrics": {}
+      },
+      "plant_pretrained_base_logistic_regression": {
+        "status": "completed",
+        "last_run": "2025-11-10T02:44:03.322130",
         "error": null,
         "metrics": {}
       },
       "imagenet_small_svm": {
         "status": "completed",
-        "last_run": "2025-11-06T10:09:21.735837",
+        "last_run": "2025-11-09T18:37:56.149459",
         "error": null,
         "metrics": {}
       },
       "imagenet_small_random_forest": {
-        "status": "in_progress",
-        "last_run": "2025-11-07T07:20:35.829973",
+        "status": "pending",
+        "last_run": null,
         "error": null,
         "metrics": {}
       },
       "imagenet_small_linear_probe": {
         "status": "completed",
-        "last_run": "2025-11-06T06:06:09.396379",
-        "error": null,
-        "metrics": {}
-      },
-      "imagenet_base_svm": {
-        "status": "in_progress",
-        "last_run": "2025-11-09T08:40:33.056479",
-        "error": "Classifier training failed - check output above",
-        "metrics": {}
-      },
-      "imagenet_base_random_forest": {
-        "status": "failed",
-        "last_run": "2025-11-06T14:24:12.962796",
-        "error": "Classifier training failed - check output above",
-        "metrics": {}
-      },
-      "imagenet_base_linear_probe": {
-        "status": "completed",
-        "last_run": "2025-11-06T06:07:04.554345",
-        "error": null,
-        "metrics": {}
-      },
-      "imagenet_large_svm": {
-        "status": "pending",
-        "last_run": "2025-11-06T06:07:38.455483",
-        "error": null,
-        "metrics": {}
-      },
-      "imagenet_large_random_forest": {
-        "status": "pending",
-        "last_run": "2025-11-06T06:07:40.249216",
-        "error": null,
-        "metrics": {}
-      },
-      "imagenet_large_linear_probe": {
-        "status": "completed",
-        "last_run": "2025-11-06T06:07:42.073502",
-        "error": null,
-        "metrics": {}
-      },
-      "plant_pretrained_base_logistic_regression": {
-        "status": "in_progress",
-        "last_run": "2025-11-09T08:48:56.688407",
+        "last_run": "2025-11-09T18:36:44.359890",
         "error": null,
         "metrics": {}
       },
       "imagenet_small_logistic_regression": {
         "status": "completed",
-        "last_run": "2025-11-07T07:21:43.512271",
+        "last_run": "2025-11-09T18:34:54.662034",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_base_svm": {
+        "status": "completed",
+        "last_run": "2025-11-09T20:10:04.516837",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_base_random_forest": {
+        "status": "pending",
+        "last_run": null,
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_base_linear_probe": {
+        "status": "completed",
+        "last_run": "2025-11-09T20:09:28.270245",
         "error": null,
         "metrics": {}
       },
       "imagenet_base_logistic_regression": {
         "status": "completed",
-        "last_run": "2025-11-07T07:23:07.098632",
+        "last_run": "2025-11-09T20:07:57.382661",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_large_svm": {
+        "status": "completed",
+        "last_run": "2025-11-10T05:25:23.102894",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_large_random_forest": {
+        "status": "pending",
+        "last_run": null,
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_large_linear_probe": {
+        "status": "completed",
+        "last_run": "2025-11-10T05:23:12.803274",
         "error": null,
         "metrics": {}
       },
       "imagenet_large_logistic_regression": {
         "status": "completed",
-        "last_run": "2025-11-07T07:24:31.027463",
+        "last_run": "2025-11-10T05:23:44.052453",
         "error": null,
         "metrics": {}
       }
@@ -126,26 +126,26 @@
     "models": {
       "plant_pretrained_base": {
         "status": "in_progress",
-        "last_run": "2025-11-06T22:39:03.769314",
-        "error": "Check console output for details",
+        "last_run": "2025-11-11T08:59:58.537767",
+        "error": null,
         "metrics": {}
       },
       "imagenet_small": {
         "status": "completed",
-        "last_run": "2025-11-06T12:50:13.772702",
+        "last_run": "2025-11-11T09:00:40.357864",
         "error": null,
         "metrics": {}
       },
       "imagenet_base": {
-        "status": "failed",
-        "last_run": "2025-11-06T03:06:01.323332",
-        "error": "Check console output for details",
+        "status": "in_progress",
+        "last_run": "2025-11-11T18:27:42.548180",
+        "error": null,
         "metrics": {}
       },
       "imagenet_large": {
-        "status": "failed",
-        "last_run": "2025-11-06T03:06:47.599568",
-        "error": "Check console output for details",
+        "status": "pending",
+        "last_run": null,
+        "error": null,
         "metrics": {}
       }
     }

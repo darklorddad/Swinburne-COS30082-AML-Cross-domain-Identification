@@ -11,5 +11,5 @@
         "max_epochs": 100,
         "patience": 15
     },
-    "training_time_seconds": 18.69635558128357
+    "training_time_seconds": 23.141786098480225
 }
