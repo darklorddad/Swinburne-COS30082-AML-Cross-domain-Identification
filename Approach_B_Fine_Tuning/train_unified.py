@@ -37,14 +37,21 @@ from tqdm import tqdm
 import json
 import time
 import numpy as np
+from torch.profiler import profile, record_function, ProfilerActivity
 
 # Add parent directories to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from Src.utils.dataset_loader import PlantDataset, get_train_transforms, get_val_transforms
+from Src.utils.dataset_loader import PlantDataset, get_train_transforms, get_val_transforms, get_minimal_transforms
 from Src.utils.visualization import (save_training_history, plot_training_history,
                                       plot_loss_curves, plot_accuracy_curves,
                                       plot_learning_rate, plot_overfitting_analysis,
                                       save_metrics_summary)
+try:
+    from Src.utils.gpu_augmentation import GPUAugmentation, AugmentedModel
+    GPU_AUG_AVAILABLE = True
+except ImportError:
+    GPU_AUG_AVAILABLE = False
+    print("⚠️  GPU augmentation not available (kornia not installed)")
 
 
 # Model configurations
@@ -82,8 +89,10 @@ def parse_args():
     parser.add_argument('--output_dir', type=str, default=None,
                         help='Output directory (default: Approach_B_Fine_Tuning/Models/<model_type>)')
     parser.add_argument('--epochs', type=int, default=60)
-    parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--image_size', type=int, default=518)
+    parser.add_argument('--batch_size', type=int, default=16)  # Reduced from 32 for gradient accumulation
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=2,
+                        help='Number of gradient accumulation steps (effective batch = batch_size * accum_steps)')
+    parser.add_argument('--image_size', type=int, default=518)  # Kept at 518 for model compatibility
     parser.add_argument('--lr_head', type=float, default=1e-3)
     parser.add_argument('--lr_backbone', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=0.05)
@@ -91,7 +100,13 @@ def parse_args():
     parser.add_argument('--dropout', type=float, default=0.4)
     parser.add_argument('--patience', type=int, default=15)
     parser.add_argument('--warmup_epochs', type=int, default=5)
-    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--num_workers', type=int, default=8)  # Increased from 4
+    parser.add_argument('--profile', action='store_true',
+                        help='Enable PyTorch profiler for performance analysis')
+    parser.add_argument('--profile_steps', type=int, default=50,
+                        help='Number of steps to profile')
+    parser.add_argument('--use_gpu_aug', action='store_true',
+                        help='Use GPU-accelerated augmentation (requires kornia)')
     return parser.parse_args()
 
 
@@ -189,40 +204,70 @@ def setup_training(model, args, stage='head_only'):
     return optimizer, scheduler
 
 
-def train_epoch(model, dataloader, criterion, optimizer, scheduler, device, epoch, max_epochs, scaler):
-    """Train for one epoch"""
+def train_epoch(model, dataloader, criterion, optimizer, scheduler, device, epoch, max_epochs, scaler,
+                gradient_accumulation_steps=1, profiler=None, gpu_augmentation=None):
+    """Train for one epoch with gradient accumulation support"""
     model.train()
     running_loss = 0.0
     correct = 0
     total = 0
 
     pbar = tqdm(dataloader, desc=f'Epoch {epoch}/{max_epochs}')
-    for images, labels in pbar:
-        images, labels = images.to(device), labels.to(device)
 
-        optimizer.zero_grad()
+    # Zero gradients at the start
+    optimizer.zero_grad()
 
-        with torch.cuda.amp.autocast():
-            outputs = model(images)
-            loss = criterion(outputs, labels)
+    for batch_idx, (images, labels) in enumerate(pbar):
+        with record_function("data_transfer"):
+            images, labels = images.to(device, non_blocking=True), labels.to(device, non_blocking=True)
 
-        scaler.scale(loss).backward()
-        scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        scaler.step(optimizer)
-        scaler.update()
+        with record_function("forward_pass"):
+            with torch.cuda.amp.autocast():
+                # Apply GPU augmentation if provided
+                if gpu_augmentation is not None:
+                    images = gpu_augmentation(images)
 
-        running_loss += loss.item() * images.size(0)
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                # Scale loss for gradient accumulation
+                loss = loss / gradient_accumulation_steps
+
+        with record_function("backward_pass"):
+            scaler.scale(loss).backward()
+
+        # Only update weights after accumulating gradients
+        if (batch_idx + 1) % gradient_accumulation_steps == 0:
+            with record_function("optimizer_step"):
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
+
+        # Track metrics (unscaled loss for display)
+        running_loss += loss.item() * gradient_accumulation_steps * images.size(0)
         _, predicted = outputs.max(1)
         total += labels.size(0)
         correct += predicted.eq(labels).sum().item()
 
         current_lr = optimizer.param_groups[0]['lr']
         pbar.set_postfix({
-            'Loss': f'{loss.item():.4f}',
+            'Loss': f'{(loss.item() * gradient_accumulation_steps):.4f}',
             'Acc': f'{100.*correct/total:.2f}%',
             'LR': f'{current_lr:.2e}'
         })
+
+        # Profiler step
+        if profiler is not None:
+            profiler.step()
+
+    # Update any remaining gradients
+    if (batch_idx + 1) % gradient_accumulation_steps != 0:
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad()
 
     scheduler.step()
 
@@ -233,7 +278,7 @@ def train_epoch(model, dataloader, criterion, optimizer, scheduler, device, epoc
     return epoch_loss, epoch_acc, current_lr
 
 
-def validate(model, dataloader, criterion, device):
+def validate(model, dataloader, criterion, device, gpu_augmentation=None):
     """Validate the model"""
     model.eval()
     running_loss = 0.0
@@ -242,7 +287,11 @@ def validate(model, dataloader, criterion, device):
 
     with torch.no_grad():
         for images, labels in tqdm(dataloader, desc='Validating', leave=False):
-            images, labels = images.to(device), labels.to(device)
+            images, labels = images.to(device, non_blocking=True), labels.to(device, non_blocking=True)
+
+            # Apply GPU augmentation (normalization) if provided
+            if gpu_augmentation is not None:
+                images = gpu_augmentation(images)
 
             outputs = model(images)
             loss = criterion(outputs, labels)
@@ -268,11 +317,15 @@ def main():
     config = MODEL_CONFIGS[args.model_type]
 
     print("=" * 70)
-    print(f"🚀 {config['display_name'].upper()} - FINE-TUNING")
+    print(f"🚀 {config['display_name'].upper()} - FINE-TUNING (OPTIMIZED)")
     print("=" * 70)
     print(f"Model type: {args.model_type}")
     print(f"Output: {args.output_dir}")
     print(f"Epochs: {args.epochs} | Batch size: {args.batch_size}")
+    print(f"Gradient Accumulation: {args.gradient_accumulation_steps} steps")
+    print(f"Effective Batch Size: {args.batch_size * args.gradient_accumulation_steps}")
+    print(f"Image Size: {args.image_size} | Num Workers: {args.num_workers}")
+    print(f"Profiling: {'Enabled' if args.profile else 'Disabled'}")
     print("=" * 70)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -286,8 +339,17 @@ def main():
 
     # Load data
     print("\n📂 Loading datasets...")
-    train_transform = get_train_transforms(args.image_size)
-    val_transform = get_val_transforms(args.image_size)
+
+    # Choose transforms based on GPU augmentation setting
+    use_gpu_aug = args.use_gpu_aug and GPU_AUG_AVAILABLE
+    if use_gpu_aug:
+        print("   🚀 Using GPU-accelerated augmentation (kornia)")
+        train_transform = get_minimal_transforms(args.image_size)
+        val_transform = get_minimal_transforms(args.image_size)
+    else:
+        print("   📊 Using CPU augmentation (torchvision)")
+        train_transform = get_train_transforms(args.image_size)
+        val_transform = get_val_transforms(args.image_size)
 
     train_dataset = PlantDataset(args.train_dir, transform=train_transform)
     val_dataset = PlantDataset(args.val_dir, transform=val_transform)
@@ -307,6 +369,15 @@ def main():
     # Load model
     model = load_model(args.model_type, args.plant_model_path,
                       len(train_dataset.classes), args.dropout)
+
+    # Wrap with GPU augmentation if enabled
+    if use_gpu_aug:
+        print("\n🔧 Wrapping model with GPU augmentation...")
+        train_aug = GPUAugmentation(image_size=args.image_size, training=True).to(device)
+        val_aug = GPUAugmentation(image_size=args.image_size, training=False).to(device)
+        # Note: We'll apply augmentation manually in the training loop for better control
+        print("   ✅ GPU augmentation modules created")
+
     model = model.to(device)
 
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
@@ -333,13 +404,34 @@ def main():
 
     stage1_start = time.time()
 
+    # Setup profiler if enabled
+    prof = None
+    if args.profile:
+        print(f"📊 Profiler enabled - will profile first {args.profile_steps} steps")
+        prof = profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(
+                os.path.join(args.output_dir, 'profiler_logs')
+            )
+        )
+        prof.start()
+
     for epoch in range(args.warmup_epochs):
         train_loss, train_acc, lr = train_epoch(
             model, train_loader, criterion, optimizer, scheduler,
-            device, epoch+1, args.warmup_epochs, scaler
+            device, epoch+1, args.warmup_epochs, scaler,
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
+            profiler=prof,
+            gpu_augmentation=train_aug if use_gpu_aug else None
         )
 
-        val_loss, val_acc = validate(model, val_loader, criterion, device)
+        val_loss, val_acc = validate(
+            model, val_loader, criterion, device,
+            gpu_augmentation=val_aug if use_gpu_aug else None
+        )
 
         history['epochs'].append(epoch + 1)
         history['train_loss'].append(train_loss)
@@ -358,6 +450,23 @@ def main():
 
     stage1_time = time.time() - stage1_start
 
+    # Stop profiler after Stage 1 if enabled
+    if prof is not None:
+        prof.stop()
+        print(f"📊 Profiler stopped - results saved to {os.path.join(args.output_dir, 'profiler_logs')}")
+
+        # Print profiler summary
+        print("\n" + "="*70)
+        print("📊 PROFILER SUMMARY - Top Operations by CPU Time")
+        print("="*70)
+        print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
+
+        print("\n" + "="*70)
+        print("📊 PROFILER SUMMARY - Top Operations by CUDA Time")
+        print("="*70)
+        print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+        prof = None
+
     # Stage 2: Gradual unfreezing
     optimizer, scheduler = setup_training(model, args, stage='gradual_unfreeze')
 
@@ -372,10 +481,16 @@ def main():
 
         train_loss, train_acc, lr = train_epoch(
             model, train_loader, criterion, optimizer, scheduler,
-            device, actual_epoch, args.epochs, scaler
+            device, actual_epoch, args.epochs, scaler,
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
+            profiler=None,  # No profiling in Stage 2
+            gpu_augmentation=train_aug if use_gpu_aug else None
         )
 
-        val_loss, val_acc = validate(model, val_loader, criterion, device)
+        val_loss, val_acc = validate(
+            model, val_loader, criterion, device,
+            gpu_augmentation=val_aug if use_gpu_aug else None
+        )
 
         history['epochs'].append(actual_epoch)
         history['train_loss'].append(train_loss)

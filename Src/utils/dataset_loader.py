@@ -210,6 +210,23 @@ def get_val_transforms(image_size=224):
     ])
 
 
+def get_minimal_transforms(image_size=224):
+    """
+    Get minimal transforms for GPU augmentation pipeline.
+    Only converts to tensor without any augmentation or normalization.
+
+    Args:
+        image_size (int): Target image size
+
+    Returns:
+        torchvision.transforms.Compose: Minimal transforms
+    """
+    return transforms.Compose([
+        transforms.Resize((image_size, image_size)),
+        transforms.ToTensor()
+    ])
+
+
 def load_class_names(class_file):
     """
     Load class names from classes.txt file.
