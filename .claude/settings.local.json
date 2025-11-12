@@ -6,7 +6,8 @@
       "Bash(git log:*)",
       "Bash(git commit:*)",
       "Bash(python test_orchestrator.py:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []
