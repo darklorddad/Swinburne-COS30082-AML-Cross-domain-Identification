@@ -56,7 +56,7 @@ class TrainingManager:
         # Approach A Models
         a_models = summary['approach_a']['models']
         print(f"Approach A - Classifiers:  ", end="")
-        print(f"✅ {a_models['completed']}/12  ", end="")
+        print(f"✅ {a_models['completed']}/16  ", end="")
         print(f"🔄 {a_models['in_progress']}  ", end="")
         print(f"❌ {a_models['failed']}  ", end="")
         print(f"⏳ {a_models['pending']}")
