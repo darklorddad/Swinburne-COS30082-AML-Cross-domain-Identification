@@ -1,0 +1,44 @@
+{
+    "best_params": {
+        "C": 1,
+        "max_iter": 1000,
+        "penalty": "l2",
+        "solver": "lbfgs"
+    },
+    "best_cv_score": 0.987312468652838,
+    "val_accuracy": 0.998,
+    "training_time_seconds": 78.08132576942444,
+    "cv_results": {
+        "mean_test_scores": [
+            0.9461871949111554,
+            0.9861873748999077,
+            0.987312468652838,
+            0.9851249139516663,
+            0.9839375272165608
+        ],
+        "std_test_scores": [
+            0.004822790280489764,
+            0.002829126068024299,
+            0.00217257975183818,
+            0.0026360012294452824,
+            0.0008965979468496431
+        ],
+        "params": [
+            "{'C': 0.01, 'max_iter': 1000, 'penalty': 'l2', 'solver': 'lbfgs'}",
+            "{'C': 0.1, 'max_iter': 1000, 'penalty': 'l2', 'solver': 'lbfgs'}",
+            "{'C': 1, 'max_iter': 1000, 'penalty': 'l2', 'solver': 'lbfgs'}",
+            "{'C': 10, 'max_iter': 1000, 'penalty': 'l2', 'solver': 'lbfgs'}",
+            "{'C': 100, 'max_iter': 1000, 'penalty': 'l2', 'solver': 'lbfgs'}"
+        ]
+    },
+    "coefficient_stats": {
+        "shape": [
+            100,
+            768
+        ],
+        "mean_abs": 0.0767424784441183,
+        "std": 0.09937523443905034,
+        "max": 0.5024481732570699,
+        "min": -0.5174844427132013
+    }
+}

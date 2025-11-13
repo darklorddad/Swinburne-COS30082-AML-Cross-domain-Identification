@@ -1,0 +1,6 @@
+{
+    "best_val_accuracy": 99.8,
+    "final_train_loss": 0.8082064651846885,
+    "final_val_loss": 0.8079815330505371,
+    "training_time_seconds": 21010.61133122444
+}

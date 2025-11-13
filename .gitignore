@@ -23,14 +23,17 @@ Dataset/test/
 # Large Feature Files (228 MB)
 Approach_A_Feature_Extraction/features/
 
-# Training Results (models, plots, metrics)
-results/
-Approach_A_Feature_Extraction/results/
-Approach_B_Fine_Tuning/Models/
+# Training Results - Allow configs/metrics/visualizations but exclude large model files
+# (Model checkpoints are excluded below by file extension)
 
-# Large Model Checkpoints
+# Large Model Checkpoints (exclude these from results directories)
 *.pth
-Approach_B_Fine_Tuning/Models/**/*.pth
+*.joblib
+*.npy
+**/best_model.*
+**/grid_search.*
+**/val_predictions.*
+**/val_predictions_proba.*
 
 # Archives
 *.zip
