@@ -182,12 +182,12 @@ Dataset/
 #### Total Models: 16
 - 4 feature extractors × 4 classifiers
 
-#### Expected Performance
-- Linear Probe: 79-89% accuracy
-- Logistic Regression: 77-88% accuracy (fastest baseline)
-- SVM: 78-88% accuracy (**⭐ Best result: 99.80%** on plant_pretrained_base)
-- Random Forest: 76-86% accuracy
-- Best: Plant-pretrained + SVM (99.80%)
+#### Actual Performance (Validation Accuracy)
+- **SVM: 99.8-99.9%** (**⭐ Best: 99.9%** on imagenet_large)
+- **Linear Probe: 99.7-99.9%** (imagenet_base: 99.9%, imagenet_large: 99.9%)
+- **Logistic Regression: 99.7-99.8%** (imagenet_large: 99.7%)
+- **Random Forest: Training in progress** (3 pending models)
+- **Overall Best: ImageNet Large + SVM (99.9%)**
 
 #### Training Time
 - Feature extraction: 15-30 min per model
@@ -228,15 +228,18 @@ Output (100 class probabilities)
 3. `imagenet_base` (ViT-Base)
 4. `imagenet_large` (ViT-Large)
 
-#### Expected Performance
-- Plant-pretrained Base: 88-93% accuracy
-- ImageNet Large: 87-92% accuracy
-- ImageNet Base: 86-91% accuracy
-- ImageNet Small: 84-89% accuracy
+#### Actual Performance (Validation Accuracy)
+- **ImageNet Small: 99.8%** ✅ (Training: 3.2 hours)
+- **ImageNet Base: 99.8%** ✅ (Training: 5.8 hours)
+- **ImageNet Large: Pending** ⏳
+- **Plant-pretrained Base: In Progress** 🔄 (Started Nov 15, 2025)
 
 #### Training Time
-- 2-6 hours per model with GPU
-- **Total**: 8-24 hours for all 4 models
+- ImageNet Small: ~3.2 hours (11,500 seconds)
+- ImageNet Base: ~5.8 hours (21,010 seconds)
+- ImageNet Large: ~6-8 hours (estimated)
+- Plant-pretrained Base: ~4-6 hours (estimated)
+- **Total**: 15-23 hours for all 4 models
 
 ---
 
@@ -536,43 +539,66 @@ results/
 ### Results Location
 
 **Approach A**: `Approach_A_Feature_Extraction/results/[classifier]_[extractor]/`
-- `best_model.pth` or `best_model.joblib`
-- `training_history.json`
-- `results/metrics_summary.json`
-- `results/confusion_matrix.png`
+- `best_model.pth` (Linear Probe - PyTorch models)
+- `best_model.joblib` (SVM, Random Forest, Logistic Regression - scikit-learn models)
+- `training_history.json` (Linear Probe only)
+- `training_config.json` (Contains accuracy metrics)
+- `results/metrics_summary.json` (Linear Probe only)
+- `visualizations/*.png` (Confusion matrix, t-SNE, PR curves, etc.)
 
 **Approach B**: `Approach_B_Fine_Tuning/Models/[model_type]/`
-- `best_model.pth`
+- `best_model.pth` (PyTorch fine-tuned models)
 - `training_history.json`
 - `training_config.json`
 - `results/metrics_summary.json`
 - `results/confusion_matrix.png`
 
+#### Model File Formats Explained
+
+Different classifiers use different file formats based on their underlying framework:
+
+| File Format | Used By | Framework | Loading Method |
+|-------------|---------|-----------|----------------|
+| **`.pth`** | Linear Probe, Fine-tuned models | PyTorch | `torch.load()` |
+| **`.joblib`** | SVM, Random Forest, Logistic Regression | scikit-learn | `joblib.load()` |
+
+- **PyTorch models (`.pth`)**: Neural network-based classifiers that require PyTorch for training and inference
+- **scikit-learn models (`.joblib`)**: Traditional machine learning classifiers serialized using joblib for efficient storage
+
 ---
 
 ## Results
 
-### Expected Performance Summary
+### Actual Performance Summary (Validation Accuracy)
 
-| Approach | Model | Classifier | Expected Accuracy |
-|----------|-------|-----------|------------------|
-| A | Plant-pretrained | Linear Probe | 83-89% |
-| A | Plant-pretrained | SVM | 82-88% |
-| A | Plant-pretrained | Random Forest | 80-86% |
-| A | ImageNet Large | Linear Probe | 81-87% |
-| A | ImageNet Base | Linear Probe | 79-85% |
-| A | ImageNet Small | Linear Probe | 79-84% |
-| **B** | **Plant-pretrained** | **Fine-tuned** | **88-93%** ⭐ |
-| B | ImageNet Large | Fine-tuned | 87-92% |
-| B | ImageNet Base | Fine-tuned | 86-91% |
-| B | ImageNet Small | Fine-tuned | 84-89% |
+| Rank | Approach | Model | Classifier | Accuracy | Status |
+|------|----------|-------|-----------|----------|--------|
+| 🥇 1 | A | ImageNet Large | **SVM** | **99.9%** | ✅ Completed |
+| 🥇 1 | A | ImageNet Base | **Linear Probe** | **99.9%** | ✅ Completed |
+| 🥇 1 | A | ImageNet Large | **Linear Probe** | **99.9%** | ✅ Completed |
+| 4 | A | Plant-pretrained | SVM | 99.8% | ✅ Completed |
+| 4 | A | Plant-pretrained | Linear Probe | 99.8% | ✅ Completed |
+| 4 | A | Plant-pretrained | Logistic Regression | 99.8% | ✅ Completed |
+| 4 | A | ImageNet Base | SVM | 99.8% | ✅ Completed |
+| 4 | A | ImageNet Small | SVM | 99.8% | ✅ Completed |
+| 4 | **B** | **ImageNet Small** | **Fine-tuned** | **99.8%** | ✅ Completed |
+| 4 | **B** | **ImageNet Base** | **Fine-tuned** | **99.8%** | ✅ Completed |
+| 11 | A | ImageNet Large | Logistic Regression | 99.7% | ✅ Completed |
+| 12 | A | ImageNet Small | Linear Probe | 99.7% | ✅ Completed |
+| - | A | Plant-pretrained | Random Forest | - | ⏳ Pending |
+| - | A | ImageNet Base | Random Forest | - | ⏳ Pending |
+| - | A | ImageNet Large | Random Forest | - | ⏳ Pending |
+| - | A | ImageNet Small | Random Forest | - | 🔄 In Progress |
+| - | B | Plant-pretrained | Fine-tuned | - | 🔄 In Progress |
+| - | B | ImageNet Large | Fine-tuned | - | ⏳ Pending |
 
 ### Key Findings
 
-1. **Domain-specific pretraining helps**: Plant-pretrained models outperform ImageNet models by 3-8%
-2. **Fine-tuning > Feature extraction**: Approach B yields 4-7% higher accuracy
-3. **Model size matters**: Larger models generally perform better
-4. **Linear Probe is competitive**: Often matches or beats SVM/RF with faster training
+1. **All approaches achieve exceptional performance**: 99.7-99.9% validation accuracy across the board
+2. **ImageNet Large models lead**: Surprisingly outperform plant-pretrained models (99.9% vs 99.8%)
+3. **Linear classifiers dominate**: Linear Probe and SVM consistently achieve top results
+4. **Feature extraction highly effective**: Approach A (frozen features) matches Approach B (fine-tuned)
+5. **Logistic Regression is fastest**: Achieves 99.7-99.8% in ~80 seconds vs hours for SVM/fine-tuning
 
 ---
 
@@ -793,4 +819,4 @@ For questions or issues, please refer to the course materials or contact the tea
 
 ---
 
-**Last Updated**: 2025-11-06
+**Last Updated**: 2025-11-17 (Accuracy results updated with actual training outcomes)
