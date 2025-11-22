@@ -94,7 +94,7 @@ def launch_autotrain_ui(autotrain_path: str):
     module_parent_dir = os.path.dirname(autotrain_path)
     env = os.environ.copy()
     env['PYTHONPATH'] = f"{module_parent_dir}{os.pathsep}{env.get('PYTHONPATH', '')}"
-    command = [sys.executable, os.path.join('launch_autotrain.py')]
+    command = [sys.executable, os.path.join('core', 'launch_autotrain.py')]
     autotrain_url = "http://localhost:7861"
     
     log_output = "Launching AutoTrain UI...\n"
@@ -387,52 +387,6 @@ def custom_sort_dataset(source_dir, destination_dir, species_list_path, pairs_li
 
     except Exception as e:
         raise gr.Error(f"Failed to sort dataset: {e}")
-
-
-def organise_dataset_folders(destination_dir: str, source_dir: str):
-    """Creates a directory structure for a new dataset by scanning leaf directories from a source and copying files."""
-    if not destination_dir:
-        raise gr.Error("Please provide a destination directory path.")
-    if not source_dir or not os.path.isdir(source_dir):
-        raise gr.Error("Please provide a valid source directory path.")
-
-    try:
-        leaf_dirs = []
-        for root, dirs, _ in os.walk(source_dir):
-            # A leaf directory has no subdirectories.
-            if not dirs:
-                # Exclude the source directory itself if it's a leaf.
-                if os.path.abspath(root) != os.path.abspath(source_dir):
-                    leaf_dirs.append(root)
-
-        if not leaf_dirs:
-            raise gr.Error("No leaf subdirectories found in the source directory. These are needed for class names.")
-
-        # Get unique class names from leaf directory basenames
-        class_names = sorted(list(set(os.path.basename(d) for d in leaf_dirs)))
-
-        # Create class directories in destination
-        created_folders = []
-        for class_name in class_names:
-            class_path = os.path.join(destination_dir, class_name)
-            os.makedirs(class_path, exist_ok=True)
-            created_folders.append(class_name)
-        
-        copied_files_count = 0
-        # Copy files from each leaf directory to the corresponding new class directory
-        for src_leaf_dir in leaf_dirs:
-            class_name = os.path.basename(src_leaf_dir)
-            dest_class_dir = os.path.join(destination_dir, class_name)
-            
-            for filename in os.listdir(src_leaf_dir):
-                src_file_path = os.path.join(src_leaf_dir, filename)
-                if os.path.isfile(src_file_path):
-                    shutil.copy2(src_file_path, dest_class_dir)
-                    copied_files_count += 1
-        
-        return f"Successfully organised dataset at: {destination_dir}\nCreated subfolders: {', '.join(created_folders)}\nCopied {copied_files_count} files."
-    except Exception as e:
-        raise gr.Error(f"Failed to organise dataset: {e}")
 
 
 def to_snake_case(text):

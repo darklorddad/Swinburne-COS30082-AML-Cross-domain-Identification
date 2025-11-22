@@ -2,7 +2,7 @@ import os
 import gradio as gr
 from gradio_wrapper import (
     classify_plant, show_model_charts, get_model_choices, update_model_choices,
-    launch_autotrain_ui, stop_autotrain_ui, generate_manifest, organise_dataset_folders,
+    launch_autotrain_ui, stop_autotrain_ui, generate_manifest,
     split_dataset, check_dataset_balance, check_dataset_splittability, custom_sort_dataset,
     clean_dataset_names
 )
@@ -98,23 +98,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         )
 
     with gr.Tab("Dataset preparation"):
-        with gr.Accordion("Organise dataset", open=False):
-            with gr.Column():
-                do_source_dir = gr.Textbox(
-                    label="Source directory"
-                )
-                do_destination_dir = gr.Textbox(
-                    label="Destination directory"
-                )
-                do_create_button = gr.Button("Organise", variant="primary")
-                do_status_message = gr.Textbox(label="Status", interactive=False, lines=5)
-
-            do_create_button.click(
-                fn=organise_dataset_folders,
-                inputs=[do_destination_dir, do_source_dir],
-                outputs=[do_status_message]
-            )
-
+        
         with gr.Accordion("Clean dataset names (Snake Case)", open=False):
             with gr.Column():
                 cn_source_dir = gr.Textbox(label="Source directory")
@@ -128,62 +112,6 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 outputs=[cn_status]
             )
 
-        with gr.Accordion("Split dataset", open=False):
-            with gr.Column():
-                ds_source_dir = gr.Textbox(label="Source directory")
-                with gr.Row():
-                    ds_train_output_dir = gr.Textbox(label="Train zip output path")
-                    ds_val_output_dir = gr.Textbox(label="Validate zip output path")
-                    ds_test_output_dir = gr.Textbox(label="Test zip output path", visible=False)
-                with gr.Row():
-                    ds_train_manifest_path = gr.Textbox(label="Train manifest output path")
-                    ds_val_manifest_path = gr.Textbox(label="Validate manifest output path")
-                    ds_test_manifest_path = gr.Textbox(label="Test manifest output path", visible=False)
-                ds_split_type = gr.Radio(["Train/Validate", "Train/Validate/Test"], label="Split type", value="Train/Validate")
-                with gr.Row():
-                    ds_train_ratio = gr.Slider(0, 100, value=80, step=1, label="Train %")
-                    ds_val_ratio = gr.Slider(0, 100, value=20, step=1, label="Validate %", interactive=False)
-                    ds_test_ratio = gr.Slider(0, 100, value=0, step=1, label="Test %", visible=False)
-                ds_resample = gr.Checkbox(label="Apply balanced resampling to training set (SMOTE/Undersampling to median)", value=False)
-                ds_split_button = gr.Button("Split", variant="primary")
-                ds_status_message = gr.Textbox(label="Status", interactive=False, lines=5)
-
-            def update_split_type(split_type):
-                is_test_visible = 'Test' in split_type
-                if is_test_visible:
-                    # Set default ratios for Train/Validate/Test
-                    return gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(value=80), gr.update(value=10), gr.update(value=10)
-                else:
-                    # Set default ratios for Train/Validate
-                    return gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(value=80), gr.update(value=20), gr.update(value=0)
-
-            def update_ratios_from_train(train_r, test_r):
-                if train_r + test_r > 100:
-                    test_r = 100 - train_r
-                val_r = 100 - train_r - test_r
-                return gr.update(value=val_r), gr.update(value=test_r)
-
-            def update_ratios_from_test(train_r, test_r):
-                if train_r + test_r > 100:
-                    train_r = 100 - test_r
-                val_r = 100 - train_r - test_r
-                return gr.update(value=val_r), gr.update(value=train_r)
-
-            ds_split_type.change(
-                fn=update_split_type,
-                inputs=ds_split_type,
-                outputs=[ds_test_ratio, ds_test_output_dir, ds_test_manifest_path, ds_train_ratio, ds_val_ratio, ds_test_ratio]
-            )
-            ds_train_ratio.input(fn=update_ratios_from_train, inputs=[ds_train_ratio, ds_test_ratio], outputs=[ds_val_ratio, ds_test_ratio])
-            ds_test_ratio.input(fn=update_ratios_from_test, inputs=[ds_train_ratio, ds_test_ratio], outputs=[ds_val_ratio, ds_train_ratio])
-
-            ds_split_button.click(
-                fn=split_dataset,
-                inputs=[ds_source_dir, ds_train_output_dir, ds_val_output_dir, ds_test_output_dir, ds_train_manifest_path, ds_val_manifest_path, ds_test_manifest_path, ds_split_type, ds_train_ratio, ds_val_ratio, ds_test_ratio, ds_resample],
-                outputs=ds_status_message
-            )
-
-    with gr.Tab("Utilities"):
         with gr.Accordion("Check dataset balance", open=False):
             with gr.Column():
                 db_source_dir = gr.Textbox(label="Source directory")
@@ -251,6 +179,61 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 fn=check_dataset_splittability,
                 inputs=[dss_source_dir, dss_split_type, dss_train_ratio, dss_val_ratio, dss_test_ratio],
                 outputs=dss_status_message
+            )
+
+        with gr.Accordion("Split dataset", open=False):
+            with gr.Column():
+                ds_source_dir = gr.Textbox(label="Source directory")
+                with gr.Row():
+                    ds_train_output_dir = gr.Textbox(label="Train zip output path")
+                    ds_val_output_dir = gr.Textbox(label="Validate zip output path")
+                    ds_test_output_dir = gr.Textbox(label="Test zip output path", visible=False)
+                with gr.Row():
+                    ds_train_manifest_path = gr.Textbox(label="Train manifest output path")
+                    ds_val_manifest_path = gr.Textbox(label="Validate manifest output path")
+                    ds_test_manifest_path = gr.Textbox(label="Test manifest output path", visible=False)
+                ds_split_type = gr.Radio(["Train/Validate", "Train/Validate/Test"], label="Split type", value="Train/Validate")
+                with gr.Row():
+                    ds_train_ratio = gr.Slider(0, 100, value=80, step=1, label="Train %")
+                    ds_val_ratio = gr.Slider(0, 100, value=20, step=1, label="Validate %", interactive=False)
+                    ds_test_ratio = gr.Slider(0, 100, value=0, step=1, label="Test %", visible=False)
+                ds_resample = gr.Checkbox(label="Apply balanced resampling to training set (SMOTE/Undersampling to median)", value=False)
+                ds_split_button = gr.Button("Split", variant="primary")
+                ds_status_message = gr.Textbox(label="Status", interactive=False, lines=5)
+
+            def update_split_type(split_type):
+                is_test_visible = 'Test' in split_type
+                if is_test_visible:
+                    # Set default ratios for Train/Validate/Test
+                    return gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(value=80), gr.update(value=10), gr.update(value=10)
+                else:
+                    # Set default ratios for Train/Validate
+                    return gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(value=80), gr.update(value=20), gr.update(value=0)
+
+            def update_ratios_from_train(train_r, test_r):
+                if train_r + test_r > 100:
+                    test_r = 100 - train_r
+                val_r = 100 - train_r - test_r
+                return gr.update(value=val_r), gr.update(value=test_r)
+
+            def update_ratios_from_test(train_r, test_r):
+                if train_r + test_r > 100:
+                    train_r = 100 - test_r
+                val_r = 100 - train_r - test_r
+                return gr.update(value=val_r), gr.update(value=train_r)
+
+            ds_split_type.change(
+                fn=update_split_type,
+                inputs=ds_split_type,
+                outputs=[ds_test_ratio, ds_test_output_dir, ds_test_manifest_path, ds_train_ratio, ds_val_ratio, ds_test_ratio]
+            )
+            ds_train_ratio.input(fn=update_ratios_from_train, inputs=[ds_train_ratio, ds_test_ratio], outputs=[ds_val_ratio, ds_test_ratio])
+            ds_test_ratio.input(fn=update_ratios_from_test, inputs=[ds_train_ratio, ds_test_ratio], outputs=[ds_val_ratio, ds_train_ratio])
+
+            ds_split_button.click(
+                fn=split_dataset,
+                inputs=[ds_source_dir, ds_train_output_dir, ds_val_output_dir, ds_test_output_dir, ds_train_manifest_path, ds_val_manifest_path, ds_test_manifest_path, ds_split_type, ds_train_ratio, ds_val_ratio, ds_test_ratio, ds_resample],
+                outputs=ds_status_message
             )
 
         with gr.Accordion("Generate directory manifest", open=False):
