@@ -3,7 +3,7 @@ import gradio as gr
 from gradio_wrapper import (
     classify_plant, show_model_charts, get_model_choices, update_model_choices,
     launch_autotrain_ui, stop_autotrain_ui, generate_manifest, organise_dataset_folders,
-    split_dataset, check_dataset_balance, check_dataset_splittability
+    split_dataset, check_dataset_balance, check_dataset_splittability, custom_sort_dataset
 )
 
 DEFAULT_MANIFEST_PATH = os.path.join('core', 'manifest.md').replace(os.sep, '/')
@@ -256,6 +256,21 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 inputs=[dp_directory_path, dp_manifest_save_path, dp_manifest_type],
                 outputs=[dp_status_message]
             )
+
+    with gr.Tab("Custom"):
+        with gr.Column():
+            cust_source_dir = gr.Textbox(label="Source directory")
+            cust_destination_dir = gr.Textbox(label="Destination directory")
+            cust_species_list_path = gr.Textbox(label="Species List Path (ID;Name format)")
+            cust_pairs_list_path = gr.Textbox(label="Pairs List Path (Optional, list of IDs)")
+            cust_sort_button = gr.Button("Sort Dataset", variant="primary")
+            cust_status_message = gr.Textbox(label="Status", interactive=False, lines=5)
+
+        cust_sort_button.click(
+            fn=custom_sort_dataset,
+            inputs=[cust_source_dir, cust_destination_dir, cust_species_list_path, cust_pairs_list_path],
+            outputs=[cust_status_message]
+        )
 
     refresh_button.click(
         fn=update_model_choices,
