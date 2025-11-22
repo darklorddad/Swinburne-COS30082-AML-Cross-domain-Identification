@@ -39,7 +39,9 @@ class PlantDataset(Dataset):
 
         # Collect all images and labels
         self.samples = []
-        self.classes = sorted(os.listdir(root_dir))
+        # Only include directories (exclude files like metadata.json)
+        self.classes = sorted([d for d in os.listdir(root_dir)
+                               if os.path.isdir(os.path.join(root_dir, d))])
 
         # Create class to index mapping
         if class_to_idx is None:
