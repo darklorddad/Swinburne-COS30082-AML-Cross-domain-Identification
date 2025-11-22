@@ -3,7 +3,8 @@ import gradio as gr
 from gradio_wrapper import (
     classify_plant, show_model_charts, get_model_choices, update_model_choices,
     launch_autotrain_ui, stop_autotrain_ui, generate_manifest, organise_dataset_folders,
-    split_dataset, check_dataset_balance, check_dataset_splittability, custom_sort_dataset
+    split_dataset, check_dataset_balance, check_dataset_splittability, custom_sort_dataset,
+    clean_dataset_names
 )
 
 DEFAULT_MANIFEST_PATH = os.path.join('core', 'manifest.md').replace(os.sep, '/')
@@ -112,6 +113,19 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 fn=organise_dataset_folders,
                 inputs=[do_destination_dir, do_source_dir],
                 outputs=[do_status_message]
+            )
+
+        with gr.Accordion("Clean dataset names (Snake Case)", open=False):
+            with gr.Column():
+                cn_source_dir = gr.Textbox(label="Source directory")
+                cn_destination_dir = gr.Textbox(label="Destination directory")
+                cn_button = gr.Button("Clean and Copy", variant="primary")
+                cn_status = gr.Textbox(label="Status", interactive=False, lines=5)
+            
+            cn_button.click(
+                fn=clean_dataset_names,
+                inputs=[cn_source_dir, cn_destination_dir],
+                outputs=[cn_status]
             )
 
         with gr.Accordion("Split dataset", open=False):

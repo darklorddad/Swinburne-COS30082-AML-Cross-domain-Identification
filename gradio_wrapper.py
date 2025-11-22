@@ -19,6 +19,7 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 import queue
 import threading
+import re
 
 from utils import (
     util_plot_training_metrics
@@ -432,6 +433,53 @@ def organise_dataset_folders(destination_dir: str, source_dir: str):
         return f"Successfully organised dataset at: {destination_dir}\nCreated subfolders: {', '.join(created_folders)}\nCopied {copied_files_count} files."
     except Exception as e:
         raise gr.Error(f"Failed to organise dataset: {e}")
+
+
+def to_snake_case(text):
+    s = str(text).strip().lower()
+    s = re.sub(r'[\s\-]+', '_', s)
+    s = re.sub(r'[^a-z0-9_]', '', s)
+    s = re.sub(r'_+', '_', s)
+    return s.strip('_')
+
+
+def clean_dataset_names(source_dir, destination_dir):
+    if not destination_dir:
+        raise gr.Error("Please provide a destination directory path.")
+    if not source_dir or not os.path.isdir(source_dir):
+        raise gr.Error("Please provide a valid source directory path.")
+
+    try:
+        copied_count = 0
+        classes_processed = set()
+
+        for root, dirs, files in os.walk(source_dir):
+            if not files:
+                continue
+                
+            # Skip the root folder itself if it has files (no class context)
+            if os.path.abspath(root) == os.path.abspath(source_dir):
+                continue
+
+            original_class_name = os.path.basename(root)
+            new_class_name = to_snake_case(original_class_name)
+            if not new_class_name:
+                new_class_name = "unknown"
+
+            dest_class_path = os.path.join(destination_dir, new_class_name)
+            os.makedirs(dest_class_path, exist_ok=True)
+            classes_processed.add(new_class_name)
+
+            for filename in files:
+                name, ext = os.path.splitext(filename)
+                if ext.lower() in ['.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff']:
+                    new_filename = f"{to_snake_case(name)}{ext.lower()}"
+                    shutil.copy2(os.path.join(root, filename), os.path.join(dest_class_path, new_filename))
+                    copied_count += 1
+        
+        return f"Successfully cleaned dataset.\nSaved to: {destination_dir}\nClasses: {len(classes_processed)}\nFiles: {copied_count}"
+    except Exception as e:
+        raise gr.Error(f"Failed to clean dataset: {e}")
 
 
 def split_dataset(source_dir, train_zip_path, val_zip_path, test_zip_path, train_manifest_path, val_manifest_path, test_manifest_path, split_type, train_ratio, val_ratio, test_ratio, resample_train_set):
