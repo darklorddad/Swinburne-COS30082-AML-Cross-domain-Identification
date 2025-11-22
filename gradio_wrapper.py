@@ -307,6 +307,87 @@ def generate_manifest(directory_path: str, manifest_save_path: str, manifest_typ
         raise gr.Error(f"Failed to generate manifest file: {e}")
 
 
+def custom_sort_dataset(source_dir, destination_dir, species_list_path, pairs_list_path):
+    """Sorts dataset into class folders named by species, renaming images with metadata."""
+    if not destination_dir:
+        raise gr.Error("Please provide a destination directory path.")
+    if not source_dir or not os.path.isdir(source_dir):
+        raise gr.Error("Please provide a valid source directory path.")
+
+    # Load species mapping
+    id_to_name = {}
+    if species_list_path and os.path.isfile(species_list_path):
+        try:
+            with open(species_list_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    parts = line.strip().split(';')
+                    if len(parts) >= 2:
+                        id_val = parts[0].strip()
+                        name_val = parts[1].strip()
+                        # Sanitize for filesystem
+                        safe_name = "".join([c if c.isalnum() or c in " .-_()" else "_" for c in name_val])
+                        id_to_name[id_val] = safe_name
+        except Exception as e:
+            print(f"Warning: Failed to parse species list: {e}")
+
+    # Load pairs list
+    ids_with_pairs = set()
+    if pairs_list_path and os.path.isfile(pairs_list_path):
+        try:
+            with open(pairs_list_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    ids_with_pairs.add(line.strip())
+        except Exception as e:
+            print(f"Warning: Failed to parse pairs list: {e}")
+
+    try:
+        copied_files_count = 0
+        created_folders = set()
+
+        for root, dirs, files in os.walk(source_dir):
+            if not files:
+                continue
+            
+            # Determine ID from folder name (assuming leaf dir is ID)
+            class_id = os.path.basename(root)
+            
+            # Use mapped name if available, else ID
+            class_name = id_to_name.get(class_id, class_id)
+            
+            # Determine Type (herbarium/photo) from path
+            path_parts = root.replace('\\', '/').split('/')
+            image_type = "unknown"
+            if 'herbarium' in path_parts:
+                image_type = "herbarium"
+            elif 'photo' in path_parts:
+                image_type = "photo"
+            
+            # Determine Pair Status
+            is_pair = "pair" if class_id in ids_with_pairs else "no_pair"
+            
+            dest_class_dir = os.path.join(destination_dir, class_name)
+            os.makedirs(dest_class_dir, exist_ok=True)
+            created_folders.add(class_name)
+
+            for filename in files:
+                if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+                    src_file_path = os.path.join(root, filename)
+                    
+                    # Construct new filename
+                    name_part = class_name.replace(" ", "_")
+                    new_filename = f"{name_part}_{image_type}_{is_pair}_{filename}"
+                    
+                    dest_file_path = os.path.join(dest_class_dir, new_filename)
+                    
+                    shutil.copy2(src_file_path, dest_file_path)
+                    copied_files_count += 1
+
+        return f"Successfully sorted dataset at: {destination_dir}\nCreated {len(created_folders)} class folders.\nCopied {copied_files_count} files."
+
+    except Exception as e:
+        raise gr.Error(f"Failed to sort dataset: {e}")
+
+
 def organise_dataset_folders(destination_dir: str, source_dir: str):
     """Creates a directory structure for a new dataset by scanning leaf directories from a source and copying files."""
     if not destination_dir:
