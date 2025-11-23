@@ -26,7 +26,7 @@ from autotrain.trainers.common import (
 )
 from autotrain.trainers.image_classification_custom import utils
 from autotrain.trainers.image_classification_custom.utils import ArcFaceClassifier
-from autotrain.trainers.image_classification.params import ImageClassificationParams
+from autotrain.trainers.image_classification_custom.params import ImageClassificationParams
 
 
 def parse_args():
