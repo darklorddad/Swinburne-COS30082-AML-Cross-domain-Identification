@@ -131,7 +131,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         with gr.Column(visible=True) as eval_run_container:
             with gr.Accordion("Settings", open=False):
                 eval_test_dir = gr.Textbox(label="Path to test set", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set"))
-                eval_button = gr.Button("Run evaluation", variant="primary")
+            eval_button = gr.Button("Run evaluation", variant="primary")
 
         # 3. Save Evaluation (Hidden until run)
         with gr.Column(visible=False) as eval_save_container:
