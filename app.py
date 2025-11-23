@@ -58,11 +58,11 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 
                 with gr.Group(visible=False) as inf_pth_group:
                     inf_pth_file = gr.File(label="Upload .pth file", file_types=[".pth"])
+                    inf_pth_classes = gr.Textbox(label="Class list path (txt/json)")
                     inf_pth_arch = gr.Textbox(
                         label="Architecture name (timm)", 
                         placeholder="e.g. resnet50, vit_base_patch16_224"
                     )
-                    inf_pth_classes = gr.Textbox(label="Class list path (txt/json)")
 
                 inf_input_image = gr.Image(type="pil", label="Upload a plant image")
 
@@ -300,7 +300,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 outputs=ds_status_message
             )
 
-    with gr.Tab("Utilities and Evaluation"):
+    with gr.Tab("Utilities"):
         with gr.Accordion("Generate directory manifest", open=False):
             with gr.Column():
                 dp_directory_path = gr.Textbox(
@@ -318,6 +318,8 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 inputs=[dp_directory_path, dp_manifest_save_path, dp_manifest_type],
                 outputs=[dp_status_message]
             )
+
+    with gr.Tab("Evaluation"):
 
     with gr.Tab("Custom"):
         with gr.Accordion("Sort Dataset (PlantCLEF)", open=False):
