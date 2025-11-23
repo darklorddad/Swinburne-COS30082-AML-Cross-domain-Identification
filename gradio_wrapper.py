@@ -412,22 +412,13 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
             total_processed += 1
 
     if total_processed == 0:
-        return "No valid labeled images found.", None, None, None
+        raise gr.Error("No valid labeled images found.")
 
     # Calculate final metrics
     mrr = np.mean(ranks)
     top1_acc = top1_correct / total_processed
     top5_acc = top5_correct / total_processed
     
-    result_text = (
-        f"## Evaluation Results\n"
-        f"**Processed Images:** {total_processed}\n\n"
-        f"### Quantitative Metrics\n"
-        f"- **Mean Reciprocal Rank (MRR):** {mrr:.4f}\n"
-        f"- **Top-1 Accuracy:** {top1_acc:.2%}\n"
-        f"- **Top-5 Accuracy:** {top5_acc:.2%}\n"
-    )
-
     # Generate t-SNE Plot
     tsne_fig = plot_tsne(embeddings, true_labels, mrr)
     
@@ -441,11 +432,10 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
         "top5": top5_acc,
         "total": total_processed,
         "embeddings": embeddings, 
-        "true_labels": true_labels,
-        "text_report": result_text
+        "true_labels": true_labels
     }
 
-    return result_text, tsne_fig, metrics_fig, results_dict
+    return tsne_fig, metrics_fig, results_dict
 
 
 def save_evaluation_results(results_dict, output_dir):
@@ -466,7 +456,6 @@ def save_evaluation_results(results_dict, output_dir):
             "top1_accuracy": results_dict.get("top1"),
             "top5_accuracy": results_dict.get("top5"),
             "total_images": results_dict.get("total"),
-            "text_report": results_dict.get("text_report"),
             "true_labels": results_dict.get("true_labels"),
             "embeddings": embeddings_list 
         }

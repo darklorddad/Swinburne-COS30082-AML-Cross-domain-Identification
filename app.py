@@ -148,7 +148,6 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         eval_results_state = gr.State()
         
         with gr.Column(visible=False) as eval_results_container:
-            eval_output_text = gr.Markdown(label="Results")
             with gr.Row():
                 eval_plot_tsne = gr.Plot(label="t-SNE Visualization")
                 eval_plot_metrics = gr.Plot(label="Metrics")
@@ -187,7 +186,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         eval_button.click(
             fn=evaluate_test_set,
             inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file, eval_pth_arch, eval_pth_classes, eval_test_dir],
-            outputs=[eval_output_text, eval_plot_tsne, eval_plot_metrics, eval_results_state]
+            outputs=[eval_plot_tsne, eval_plot_metrics, eval_results_state]
         ).then(
             fn=lambda: (gr.update(visible=True), gr.update(visible=True)),
             outputs=[eval_results_container, eval_save_container]
