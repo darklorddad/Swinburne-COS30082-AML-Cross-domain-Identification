@@ -19,17 +19,41 @@ import queue
 import threading
 import re
 import json
+from sklearn.manifold import TSNE
 
 from utils import (
     util_plot_training_metrics,
     util_save_training_metrics
 )
 
-# Try to import custom_utils for plotting
-try:
-    from custom_utils import plot_tsne
-except ImportError:
-    def plot_tsne(*args, **kwargs): return None
+def plot_tsne(embeddings, true_labels, mrr_score):
+    if len(embeddings) < 2:
+        return None
+        
+    embeddings_np = np.array(embeddings)
+    n_samples = embeddings_np.shape[0]
+    perplexity = min(30, n_samples - 1)
+    
+    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42, init='pca', learning_rate='auto')
+    tsne_results = tsne.fit_transform(embeddings_np)
+    
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    unique_labels = list(set(true_labels))
+    cmap = plt.get_cmap('tab10' if len(unique_labels) <= 10 else 'viridis')
+    
+    for i, label in enumerate(unique_labels):
+        indices = [j for j, l in enumerate(true_labels) if l == label]
+        points = tsne_results[indices]
+        color = cmap(i / len(unique_labels))
+        ax.scatter(points[:, 0], points[:, 1], label=label, color=color, s=60, alpha=0.8)
+    
+    ax.set_title(f"t-SNE Visualization (MRR: {mrr_score:.4f})")
+    if len(unique_labels) <= 20:
+        ax.legend()
+    
+    plt.tight_layout()
+    return fig
 
 
 def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes):
@@ -319,7 +343,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
             am_images.append((image, feature_map.cpu().numpy()))
 
     if total_processed == 0:
-        return "No valid labeled images found.", None, None
+        return "No valid labeled images found.", None, None, None
 
     # Calculate final metrics
     mrr = np.mean(ranks)
@@ -361,7 +385,52 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
         plt.tight_layout()
         am_fig = fig
 
-    return result_text, tsne_fig, am_fig
+    # Prepare results dict for export
+    results_dict = {
+        "mrr": mrr,
+        "top1": top1_acc,
+        "top5": top5_acc,
+        "total": total_processed,
+        "embeddings": embeddings, # List of numpy arrays
+        "true_labels": true_labels,
+        "text_report": result_text
+    }
+
+    return result_text, tsne_fig, am_fig, results_dict
+
+
+def save_evaluation_results(results_dict, output_dir):
+    if not results_dict:
+        return "No evaluation results to save. Please run evaluation first."
+    if not output_dir:
+        return "Please specify an output directory."
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    try:
+        # Save Text Report
+        with open(os.path.join(output_dir, "evaluation_report.md"), "w", encoding="utf-8") as f:
+            f.write(results_dict.get("text_report", ""))
+            
+        # Save Metrics JSON
+        metrics = {k: v for k, v in results_dict.items() if k not in ["embeddings", "true_labels", "text_report"]}
+        with open(os.path.join(output_dir, "metrics.json"), "w", encoding="utf-8") as f:
+            json.dump(metrics, f, indent=4)
+            
+        # Re-generate and save t-SNE plot
+        embeddings = results_dict.get("embeddings")
+        true_labels = results_dict.get("true_labels")
+        mrr = results_dict.get("mrr")
+        
+        if embeddings and true_labels:
+            fig = plot_tsne(embeddings, true_labels, mrr)
+            if fig:
+                fig.savefig(os.path.join(output_dir, "tsne_plot.png"))
+                plt.close(fig)
+                
+        return f"Successfully saved evaluation results to {output_dir}"
+    except Exception as e:
+        return f"Failed to save results: {e}"
 
 
 def launch_tensorboard(log_dir: str, venv_parent_dir: str):

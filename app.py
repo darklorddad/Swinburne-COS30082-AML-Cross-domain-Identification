@@ -4,7 +4,7 @@ from gradio_wrapper import (
     classify_plant, show_model_charts, get_model_choices, update_model_choices,
     launch_autotrain_ui, launch_tensorboard, generate_manifest,
     split_dataset, check_dataset_balance, check_dataset_splittability,
-    clean_dataset_names, save_metrics, evaluate_test_set
+    clean_dataset_names, save_metrics, evaluate_test_set, save_evaluation_results
 )
 try:
     from custom_utils import custom_sort_dataset, rename_test_images_func, evaluate_dataset
@@ -326,60 +326,83 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             )
 
     with gr.Tab("Evaluation"):
-        with gr.Accordion("Evaluation (Test Set)", open=False):
-            with gr.Column():
-                # Model Selection (Same as Inference)
-                eval_source = gr.Radio(
-                    choices=["Local", "Hugging Face Hub", "Local .pth"],
-                    value="Local",
-                    label="Model source"
+        # 1. Model Selection
+        with gr.Row():
+            eval_source = gr.Radio(
+                choices=["Local", "Hugging Face Hub", "Local .pth"],
+                value="Local",
+                label="Model source"
+            )
+        
+        with gr.Column():
+            eval_model_path = gr.Dropdown(
+                label="Select local model", 
+                choices=[], 
+                value=None, 
+                filterable=False,
+                visible=True
+            )
+            eval_hf_id = gr.Textbox(
+                label="Hugging Face model ID", 
+                placeholder="e.g. microsoft/resnet-50", 
+                visible=False
+            )
+            with gr.Group(visible=False) as eval_pth_group:
+                eval_pth_file = gr.File(label="Upload .pth file", file_types=[".pth"])
+                eval_pth_classes = gr.File(label="Upload class list (txt/json)", file_types=[".txt", ".json"])
+                eval_pth_arch = gr.Textbox(
+                    label="Architecture name (timm)", 
+                    placeholder="e.g. resnet50, vit_base_patch16_224"
                 )
-                eval_model_path = gr.Dropdown(
-                    label="Select local model", 
-                    choices=[], 
-                    value=None, 
-                    filterable=False,
-                    visible=True
-                )
-                eval_hf_id = gr.Textbox(
-                    label="Hugging Face model ID", 
-                    placeholder="e.g. microsoft/resnet-50", 
-                    visible=False
-                )
-                with gr.Group(visible=False) as eval_pth_group:
-                    eval_pth_file = gr.File(label="Upload .pth file", file_types=[".pth"])
-                    eval_pth_classes = gr.File(label="Upload class list (txt/json)", file_types=[".txt", ".json"])
-                    eval_pth_arch = gr.Textbox(
-                        label="Architecture name (timm)", 
-                        placeholder="e.g. resnet50, vit_base_patch16_224"
-                    )
 
-                eval_test_dir = gr.Textbox(label="Test Directory (with renamed images)", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Test"))
-                eval_button = gr.Button("Run Evaluation", variant="primary")
-                
-                eval_output_text = gr.Markdown(label="Results")
+        # 2. Test Set & Run
+        with gr.Column(visible=True) as eval_run_container:
+            eval_test_dir = gr.Textbox(label="Test Directory (with renamed images)", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Test"))
+            eval_button = gr.Button("Run Evaluation", variant="primary")
+
+        # 3. Results & Export (Hidden until run)
+        eval_results_state = gr.State()
+        
+        with gr.Column(visible=False) as eval_results_container:
+            with gr.Accordion("Export Results", open=False):
                 with gr.Row():
-                    eval_plot_tsne = gr.Plot(label="t-SNE Visualization")
-                    eval_plot_am = gr.Plot(label="Activation Maps (Sample)")
-            
-            def update_eval_inputs(source):
-                return (
-                    gr.update(visible=(source == "Local")),
-                    gr.update(visible=(source == "Hugging Face Hub")),
-                    gr.update(visible=(source == "Local .pth"))
-                )
+                    eval_export_dir = gr.Textbox(label="Export Directory", value="Evaluation_Results")
+                    eval_export_btn = gr.Button("Export")
+                eval_export_status = gr.Textbox(label="Status", interactive=False)
 
-            eval_source.change(
-                fn=update_eval_inputs,
-                inputs=[eval_source],
-                outputs=[eval_model_path, eval_hf_id, eval_pth_group]
+            eval_output_text = gr.Markdown(label="Results")
+            with gr.Row():
+                eval_plot_tsne = gr.Plot(label="t-SNE Visualization")
+                eval_plot_am = gr.Plot(label="Activation Maps (Sample)")
+
+        # Logic
+        def update_eval_inputs(source):
+            return (
+                gr.update(visible=(source == "Local")),
+                gr.update(visible=(source == "Hugging Face Hub")),
+                gr.update(visible=(source == "Local .pth"))
             )
 
-            eval_button.click(
-                fn=evaluate_test_set,
-                inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file, eval_pth_arch, eval_pth_classes, eval_test_dir],
-                outputs=[eval_output_text, eval_plot_tsne, eval_plot_am]
-            )
+        eval_source.change(
+            fn=update_eval_inputs,
+            inputs=[eval_source],
+            outputs=[eval_model_path, eval_hf_id, eval_pth_group]
+        )
+
+        eval_button.click(
+            fn=evaluate_test_set,
+            inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file, eval_pth_arch, eval_pth_classes, eval_test_dir],
+            outputs=[eval_output_text, eval_plot_tsne, eval_plot_am, eval_results_state]
+        ).then(
+            fn=lambda: gr.update(visible=True),
+            outputs=[eval_results_container]
+        )
+        
+        eval_export_btn.click(
+            fn=save_evaluation_results,
+            inputs=[eval_results_state, eval_export_dir],
+            outputs=[eval_export_status]
+        )
 
     with gr.Tab("Custom", visible=CUSTOM_UTILS_AVAILABLE):
         with gr.Accordion("Evaluation (Dataset - MRR & t-SNE)", open=False):
