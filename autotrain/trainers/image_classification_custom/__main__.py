@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 
 import torch
 from accelerate.state import PartialState
@@ -30,9 +31,11 @@ from autotrain.trainers.image_classification_custom.params import ImageClassific
 
 
 class CustomTrainer(Trainer):
-    def __init__(self, class_weights=None, **kwargs):
+    def __init__(self, class_weights=None, custom_config=None, image_processor=None, **kwargs):
         super().__init__(**kwargs)
         self.class_weights = class_weights
+        self.custom_config = custom_config
+        self.image_processor = image_processor
 
     def get_train_dataloader(self):
         if self.train_dataset is None:
@@ -61,6 +64,27 @@ class CustomTrainer(Trainer):
             num_workers=self.args.dataloader_num_workers,
             pin_memory=self.args.dataloader_pin_memory,
         )
+
+    def save_model(self, output_dir=None, _internal_call=False):
+        if output_dir is None:
+            output_dir = self.args.output_dir
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Save weights
+        torch.save(self.model.state_dict(), os.path.join(output_dir, "pytorch_model.bin"))
+
+        # Save config.json
+        if self.custom_config:
+            with open(os.path.join(output_dir, "config.json"), "w") as f:
+                json.dump(self.custom_config, f, indent=4)
+
+        # Save training args
+        torch.save(self.args, os.path.join(output_dir, "training_args.bin"))
+
+        # Save image processor
+        if self.image_processor:
+            self.image_processor.save_pretrained(output_dir)
 
 
 def parse_args():
@@ -237,8 +261,46 @@ def train(config):
         class_weights = torch.tensor(class_weights, dtype=torch.float)
         logger.info("Using Class Balanced Sampler")
 
+    # Prepare custom config for saving
+    custom_config = {
+        "architectures": ["ArcFaceClassifier"],
+        "model_type": "custom_arcface",
+        "backbone": config.model,
+        "num_classes": num_classes,
+        "arcface_s": config.arcface_s,
+        "arcface_m": config.arcface_m,
+        "image_size": image_processor.size if image_processor else {"height": 224, "width": 224},
+        "id2label": {i: c for i, c in enumerate(classes)},
+        "label2id": label2id,
+    }
+
+    # Write inference notes early
+    inference_notes = f"""
+# Inference Notes
+
+To load this model, you need to instantiate the `ArcFaceClassifier` class with the same arguments used during training, and then load the weights.
+
+```python
+from autotrain.trainers.image_classification_custom.utils import ArcFaceClassifier
+import torch
+
+model = ArcFaceClassifier(
+    model_name="{config.model}",
+    num_classes={num_classes},
+    s={config.arcface_s},
+    m={config.arcface_m}
+)
+model.load_state_dict(torch.load("pytorch_model.bin"))
+model.eval()
+```
+"""
+    with open(f"{config.project_name}/inference_notes.md", "w") as f:
+        f.write(inference_notes)
+
     trainer_warmup = CustomTrainer(
         class_weights=class_weights,
+        custom_config=custom_config,
+        image_processor=image_processor,
         args=TrainingArguments(**warmup_args_dict),
         model=model,
         train_dataset=train_data,
@@ -267,6 +329,8 @@ def train(config):
 
     trainer = CustomTrainer(
         class_weights=class_weights,
+        custom_config=custom_config,
+        image_processor=image_processor,
         args=args,
         model=model,
         callbacks=callbacks_to_use,
@@ -281,50 +345,7 @@ def train(config):
     trainer.train()
 
     logger.info("Finished training, saving model...")
-    torch.save(model.state_dict(), f"{config.project_name}/pytorch_model.bin")
-
-    inference_notes = f"""
-# Inference Notes
-
-To load this model, you need to instantiate the `ArcFaceClassifier` class with the same arguments used during training, and then load the weights.
-
-```python
-from autotrain.trainers.image_classification_custom.utils import ArcFaceClassifier
-import torch
-
-model = ArcFaceClassifier(
-    model_name="{config.model}",
-    num_classes={num_classes},
-    s={config.arcface_s},
-    m={config.arcface_m}
-)
-model.load_state_dict(torch.load("pytorch_model.bin"))
-model.eval()
-```
-"""
-    with open(f"{config.project_name}/inference_notes.md", "w") as f:
-        f.write(inference_notes)
-
-    # Save training arguments (Standard AutoTrain behavior)
-    torch.save(args, f"{config.project_name}/training_args.bin")
-
-    # Save custom config.json (Standard AutoTrain behavior)
-    custom_config = {
-        "architectures": ["ArcFaceClassifier"],
-        "model_type": "custom_arcface",
-        "backbone": config.model,
-        "num_classes": num_classes,
-        "arcface_s": config.arcface_s,
-        "arcface_m": config.arcface_m,
-        "image_size": image_processor.size if image_processor else {"height": 224, "width": 224},
-        "id2label": {i: c for i, c in enumerate(classes)},
-        "label2id": label2id,
-    }
-    with open(f"{config.project_name}/config.json", "w") as f:
-        json.dump(custom_config, f, indent=4)
-
-    if image_processor:
-        image_processor.save_pretrained(config.project_name)
+    trainer.save_model(config.project_name)
 
     model_card = utils.create_model_card(config, trainer, num_classes)
 
