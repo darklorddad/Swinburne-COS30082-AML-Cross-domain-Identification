@@ -36,12 +36,57 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
     with gr.Tab("Inference"):
         with gr.Row():
             with gr.Column(scale=1):
-                inf_model_path = gr.Dropdown(label="Select model", choices=[], value=None, filterable=False)
+                inf_source = gr.Radio(
+                    choices=["Local AutoTrain", "Hugging Face Hub", "Local .pth"],
+                    value="Local AutoTrain",
+                    label="Model Source"
+                )
+                
+                inf_model_path = gr.Dropdown(
+                    label="Select Local Model", 
+                    choices=[], 
+                    value=None, 
+                    filterable=False,
+                    visible=True
+                )
+                
+                inf_hf_id = gr.Textbox(
+                    label="Hugging Face Model ID", 
+                    placeholder="e.g. microsoft/resnet-50", 
+                    visible=False
+                )
+                
+                with gr.Group(visible=False) as inf_pth_group:
+                    inf_pth_file = gr.File(label="Upload .pth file", file_types=[".pth"])
+                    inf_pth_arch = gr.Textbox(
+                        label="Architecture Name (timm)", 
+                        placeholder="e.g. resnet50, vit_base_patch16_224"
+                    )
+
                 inf_input_image = gr.Image(type="pil", label="Upload a plant image")
+
             with gr.Column(scale=1):
                 inf_output_label = gr.Label(num_top_classes=5, label="Predictions")
                 inf_button = gr.Button("Classify", variant="primary")
-        inf_button.click(classify_plant, inputs=[inf_model_path, inf_input_image], outputs=inf_output_label)
+
+        def update_inf_inputs(source):
+            return (
+                gr.update(visible=(source == "Local AutoTrain")),
+                gr.update(visible=(source == "Hugging Face Hub")),
+                gr.update(visible=(source == "Local .pth"))
+            )
+
+        inf_source.change(
+            fn=update_inf_inputs,
+            inputs=[inf_source],
+            outputs=[inf_model_path, inf_hf_id, inf_pth_group]
+        )
+
+        inf_button.click(
+            fn=classify_plant, 
+            inputs=[inf_source, inf_model_path, inf_hf_id, inf_pth_file, inf_pth_arch, inf_input_image], 
+            outputs=inf_output_label
+        )
 
     with gr.Tab("Training metrics"):
         metrics_model_path = gr.Dropdown(label="Select model", choices=[], value=None, filterable=False)

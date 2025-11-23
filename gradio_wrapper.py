@@ -37,47 +37,116 @@ def _enqueue_output(stream, queue_obj):
         stream.close()
 
 
-def classify_plant(model_path: str, input_image: Image.Image) -> dict:
-    if not model_path:
-        raise gr.Error("Please select a model directory.")
+def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, input_image) -> dict:
+    if input_image is None:
+        raise gr.Error("Please upload an image.")
 
-    model_dir = model_path
-    if os.path.isfile(model_path):
-        model_dir = os.path.dirname(model_path)
+    model = None
+    image_processor = None
+    
+    # --- CASE 1: Local AutoTrain or Hugging Face Hub ---
+    if source_type in ["Local AutoTrain", "Hugging Face Hub"]:
+        model_id = local_path if source_type == "Local AutoTrain" else hf_id
+        
+        if not model_id:
+            raise gr.Error(f"Please specify the {source_type} model.")
 
-    # If model_dir is a checkpoint, the actual model root is its parent.
-    if os.path.basename(model_dir).startswith('checkpoint-'):
-        checkpoint_dir = model_dir
-        model_dir = os.path.dirname(model_dir)
-    else:
-        # It's a model directory. Find the latest checkpoint.
-        checkpoint_dir = model_dir  # Default to model_dir if no checkpoints
-        checkpoints = []
-        if os.path.isdir(model_dir):
-            for item in os.listdir(model_dir):
-                path = os.path.join(model_dir, item)
-                if os.path.isdir(path) and item.startswith('checkpoint-'):
-                    try:
-                        step = int(item.split('-')[-1])
-                        checkpoints.append((step, path))
-                    except (ValueError, IndexError):
-                        continue  # Not a valid checkpoint folder name
+        # Handle Local AutoTrain checkpoint logic
+        if source_type == "Local AutoTrain":
+            if os.path.isfile(model_id):
+                model_id = os.path.dirname(model_id)
+            if os.path.basename(model_id).startswith('checkpoint-'):
+                checkpoint_dir = model_id
+                model_id = os.path.dirname(model_id) # Root for processor
+            else:
+                # Find latest checkpoint
+                checkpoint_dir = model_id
+                checkpoints = []
+                if os.path.isdir(model_id):
+                    for item in os.listdir(model_id):
+                        path = os.path.join(model_id, item)
+                        if os.path.isdir(path) and item.startswith('checkpoint-'):
+                            try:
+                                step = int(item.split('-')[-1])
+                                checkpoints.append((step, path))
+                            except (ValueError, IndexError):
+                                continue
+                if checkpoints:
+                    checkpoint_dir = sorted(checkpoints, key=lambda x: x[0], reverse=True)[0][1]
+            
+            # Load
+            try:
+                image_processor = AutoImageProcessor.from_pretrained(model_id, local_files_only=True)
+                model = AutoModelForImageClassification.from_pretrained(checkpoint_dir, local_files_only=True)
+            except Exception as e:
+                raise gr.Error(f"Error loading local model: {e}")
 
-        if checkpoints:
-            latest_checkpoint_path = sorted(checkpoints, key=lambda x: x[0], reverse=True)[0][1]
-            checkpoint_dir = latest_checkpoint_path
-            print(f"Found latest checkpoint for '{model_dir}': '{checkpoint_dir}'")
+        else: 
+            # Handle Hugging Face Hub
+            try:
+                image_processor = AutoImageProcessor.from_pretrained(model_id)
+                model = AutoModelForImageClassification.from_pretrained(model_id)
+            except Exception as e:
+                raise gr.Error(f"Error loading from Hub: {e}")
 
-    try:
-        image_processor = AutoImageProcessor.from_pretrained(model_dir, local_files_only=True)
-        model = AutoModelForImageClassification.from_pretrained(checkpoint_dir, local_files_only=True)
-    except Exception as e:
-        raise gr.Error(f"Error loading model from {checkpoint_dir}. Check path and files. Original error: {e}")
-    inputs = image_processor(images=input_image, return_tensors="pt")
-    with torch.no_grad(): outputs = model(**inputs)
-    probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)[0]
-    top5_prob, top5_indices = torch.topk(probabilities, 5)
-    return {model.config.id2label[i.item()]: p.item() for i, p in zip(top5_indices, top5_prob)}
+        # Inference for Transformers models
+        inputs = image_processor(images=input_image, return_tensors="pt")
+        with torch.no_grad(): outputs = model(**inputs)
+        probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)[0]
+        top5_prob, top5_indices = torch.topk(probabilities, 5)
+        return {model.config.id2label[i.item()]: p.item() for i, p in zip(top5_indices, top5_prob)}
+
+    # --- CASE 2: Local .pth File (timm) ---
+    elif source_type == "Local .pth":
+        if not pth_file:
+            raise gr.Error("Please upload a .pth file.")
+        if not pth_arch:
+            raise gr.Error("Please specify the architecture name (e.g., resnet50).")
+        
+        try:
+            import timm
+        except ImportError:
+            raise gr.Error("timm is required to load .pth files. Please install it via 'pip install timm'.")
+
+        try:
+            # 1. Create Model Skeleton
+            if pth_arch not in timm.list_models():
+                raise gr.Error(f"Architecture '{pth_arch}' not found in timm.")
+            
+            model = timm.create_model(pth_arch, pretrained=False)
+            
+            # 2. Load Weights
+            state_dict = torch.load(pth_file.name, map_location=torch.device('cpu'))
+            
+            # Handle cases where state_dict might be wrapped
+            if 'state_dict' in state_dict:
+                state_dict = state_dict['state_dict']
+            elif 'model' in state_dict:
+                state_dict = state_dict['model']
+                
+            model.load_state_dict(state_dict)
+            model.eval()
+
+            # 3. Preprocessing using timm's data config
+            config = timm.data.resolve_data_config({}, model=model)
+            transform = timm.data.create_transform(**config)
+            
+            input_tensor = transform(input_image).unsqueeze(0)
+
+            # 4. Inference
+            with torch.no_grad():
+                output = model(input_tensor)
+            
+            probabilities = torch.nn.functional.softmax(output[0], dim=0)
+            top5_prob, top5_indices = torch.topk(probabilities, 5)
+            
+            # Since .pth files don't store class names, we return Class Indices
+            return {f"Class {i.item()}": p.item() for i, p in zip(top5_indices, top5_prob)}
+
+        except Exception as e:
+            raise gr.Error(f"Failed to load .pth file: {e}")
+
+    return {}
 
 
 def launch_autotrain_ui(autotrain_path: str):
