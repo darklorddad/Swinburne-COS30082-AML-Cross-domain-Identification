@@ -167,7 +167,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             with gr.Column():
                 cn_source_dir = gr.Textbox(label="Source directory")
                 cn_destination_dir = gr.Textbox(label="Destination directory")
-                cn_button = gr.Button("Clean and Copy", variant="primary")
+                cn_button = gr.Button("Clean and copy", variant="primary")
                 cn_status = gr.Textbox(label="Status", interactive=False, lines=5)
             
             cn_button.click(
