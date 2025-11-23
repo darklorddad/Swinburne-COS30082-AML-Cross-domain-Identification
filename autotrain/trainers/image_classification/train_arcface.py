@@ -57,7 +57,13 @@ class ArcFaceModel(nn.Module):
             config=config,
             trust_remote_code=ALLOW_REMOTE_CODE,
         )
-        self.embedding_dim = config.hidden_size
+        if hasattr(config, "hidden_size"):
+            self.embedding_dim = config.hidden_size
+        elif hasattr(config, "hidden_sizes"):
+            self.embedding_dim = config.hidden_sizes[-1]
+        else:
+            raise ValueError("Could not determine embedding dimension from config")
+
         self.head = ArcFaceHead(
             in_features=self.embedding_dim,
             out_features=num_labels,
@@ -73,9 +79,15 @@ class ArcFaceModel(nn.Module):
         if hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
             embeds = outputs.pooler_output
         elif hasattr(outputs, "last_hidden_state"):
-            embeds = outputs.last_hidden_state.mean(dim=1)
+            if len(outputs.last_hidden_state.shape) == 4:
+                embeds = outputs.last_hidden_state.mean(dim=[-2, -1])
+            else:
+                embeds = outputs.last_hidden_state.mean(dim=1)
         else:
-            embeds = outputs[0].mean(dim=1)
+            if len(outputs[0].shape) == 4:
+                embeds = outputs[0].mean(dim=[-2, -1])
+            else:
+                embeds = outputs[0].mean(dim=1)
 
         logits = self.head(embeds, labels)
         loss = None
