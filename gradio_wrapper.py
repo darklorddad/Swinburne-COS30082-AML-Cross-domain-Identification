@@ -34,7 +34,7 @@ def get_placeholder_plot():
     return fig
 
 
-def plot_tsne(embeddings, true_labels, mrr_score):
+def plot_tsne(embeddings, true_labels, mrr_score, is_logits=False):
     if len(embeddings) < 2:
         return None
         
@@ -56,7 +56,11 @@ def plot_tsne(embeddings, true_labels, mrr_score):
         color = cmap(i / len(unique_labels))
         ax.scatter(points[:, 0], points[:, 1], label=label, color=color, s=60, alpha=0.8)
     
-    ax.set_title(f"t-SNE Visualisation (MRR: {mrr_score:.4f})")
+    title = f"t-SNE Visualisation (MRR: {mrr_score:.4f})"
+    if is_logits:
+        title += "\n(Feature extraction failed; using logits)"
+    ax.set_title(title)
+
     if len(unique_labels) <= 20:
         ax.legend()
     
@@ -327,6 +331,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     top1_correct = 0
     top5_correct = 0
     total_processed = 0
+    fallback_to_logits = False
     
     # Use a temporary file to store embeddings to avoid OOM on large datasets
     embeddings_file = tempfile.NamedTemporaryFile(delete=False, suffix='.npy')
@@ -381,6 +386,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
                                 batch_emb_numpy = last_hidden.cpu().numpy()
                         else:
                             batch_emb_numpy = logits.cpu().numpy()
+                            fallback_to_logits = True
 
                     elif model_type == "timm":
                         tensors = [processor(img) for img in batch_images]
@@ -407,6 +413,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
                             # Fallback
                             logits = model(input_tensor)
                             batch_emb_numpy = logits.cpu().numpy()
+                            fallback_to_logits = True
 
                     # Save embeddings to disk
                     if batch_emb_numpy is not None:
@@ -470,7 +477,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
             tsne_labels = [true_labels[i] for i in indices]
         
         # Generate t-SNE Plot
-        tsne_fig = plot_tsne(tsne_embeddings, tsne_labels, mrr)
+        tsne_fig = plot_tsne(tsne_embeddings, tsne_labels, mrr, is_logits=fallback_to_logits)
         
         # Generate Metrics Plot
         metrics_fig = plot_metrics(mrr, top1_acc, top5_acc)
@@ -483,7 +490,8 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
             "total": total_processed,
             "embeddings": embeddings_list, 
             "true_labels": true_labels,
-            "skipped_folders": skipped_folders
+            "skipped_folders": skipped_folders,
+            "fallback_to_logits": fallback_to_logits
         }
 
         return tsne_fig, metrics_fig, results_dict
@@ -525,9 +533,10 @@ def save_evaluation_results(results_dict, output_dir):
         embeddings = results_dict.get("embeddings")
         true_labels = results_dict.get("true_labels")
         mrr = results_dict.get("mrr")
+        fallback = results_dict.get("fallback_to_logits", False)
         
         if embeddings and true_labels:
-            fig = plot_tsne(embeddings, true_labels, mrr)
+            fig = plot_tsne(embeddings, true_labels, mrr, is_logits=fallback)
             if fig:
                 fig.savefig(os.path.join(output_dir, "tsne_plot.png"))
                 plt.close(fig)
