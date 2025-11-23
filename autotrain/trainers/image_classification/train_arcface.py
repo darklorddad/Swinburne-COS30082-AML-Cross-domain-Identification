@@ -174,7 +174,10 @@ def train(config):
     )
 
     args = TrainingArguments(**training_args)
-    callbacks = [UploadLogs(config=config), LossLoggingCallback(), TrainStartCallback()]
+    callbacks = [LossLoggingCallback(), TrainStartCallback()]
+    if config.push_to_hub and config.username != "local":
+        callbacks.insert(0, UploadLogs(config=config))
+
     if config.valid_split:
         callbacks.append(EarlyStoppingCallback(early_stopping_patience=config.early_stopping_patience))
 
