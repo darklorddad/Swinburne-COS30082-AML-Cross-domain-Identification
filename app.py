@@ -91,6 +91,18 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
     with gr.Tab("Training metrics"):
         metrics_model_path = gr.Dropdown(label="Select model", choices=[], value=None, filterable=False)
         with gr.Column(visible=False) as inf_plots_container:
+            with gr.Group():
+                with gr.Row():
+                    metrics_save_dir = gr.Textbox(label="Save Directory", placeholder="e.g. ./metrics_output")
+                    metrics_save_btn = gr.Button("Save Metrics", variant="primary")
+                metrics_status = gr.Textbox(label="Status", interactive=False, lines=2)
+
+                metrics_save_btn.click(
+                    fn=save_metrics,
+                    inputs=[metrics_model_path, metrics_save_dir],
+                    outputs=[metrics_status]
+                )
+
             with gr.Row():
                 inf_plot_loss = gr.Plot(label="Loss")
                 inf_plot_acc = gr.Plot(label="Accuracy")
@@ -108,17 +120,6 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 inf_plot_sps = gr.Plot(label="Eval samples/sec")
             with gr.Row():
                 inf_plot_steps_ps = gr.Plot(label="Eval steps/sec")
-            
-            with gr.Row():
-                metrics_save_dir = gr.Textbox(label="Save Directory", placeholder="e.g. ./metrics_output")
-                metrics_save_btn = gr.Button("Save Metrics", variant="primary")
-            metrics_status = gr.Textbox(label="Status", interactive=False, lines=2)
-
-            metrics_save_btn.click(
-                fn=save_metrics,
-                inputs=[metrics_model_path, metrics_save_dir],
-                outputs=[metrics_status]
-            )
 
         inf_plots = [
             inf_plot_loss, inf_plot_acc, inf_plot_lr, inf_plot_grad, inf_plot_f1,
