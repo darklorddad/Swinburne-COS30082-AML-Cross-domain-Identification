@@ -199,6 +199,9 @@ def train(config):
         train_dataset=train_data,
         eval_dataset=valid_data,
         callbacks=callbacks,
+        compute_metrics=(
+            utils._binary_classification_metrics if num_classes == 2 else utils._multi_class_classification_metrics
+        ),
     )
 
     trainer.train()
