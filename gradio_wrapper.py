@@ -210,6 +210,27 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
     return {}
 
 
+def plot_metrics(mrr, top1, top5):
+    fig, ax = plt.subplots(figsize=(8, 6))
+    metrics = ['MRR', 'Top-1 Acc', 'Top-5 Acc']
+    values = [mrr, top1, top5]
+    bars = ax.bar(metrics, values, color=['#3498db', '#2ecc71', '#9b59b6'])
+    
+    ax.set_ylim(0, 1.0)
+    ax.set_title('Evaluation Metrics')
+    ax.set_ylabel('Score')
+    
+    # Add value labels
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.4f}',
+                ha='center', va='bottom')
+    
+    plt.tight_layout()
+    return fig
+
+
 def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, test_dir):
     if not test_dir or not os.path.exists(test_dir):
         raise gr.Error("Please provide a valid test directory.")
@@ -298,92 +319,97 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     top5_correct = 0
     total_processed = 0
     
-    # For Activation Maps (Feature Maps)
-    am_images = [] # List of (original_image, heatmap)
-    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    model.eval()
+
+    batch_size = 32
     progress = gr.Progress()
     
-    for i, img_path in enumerate(progress.tqdm(image_paths, desc="Evaluating")):
-        gt_label = image_labels[i]
-        gt_id = label2id[gt_label]
+    # Batch processing loop
+    for i in progress.tqdm(range(0, len(image_paths), batch_size), desc="Evaluating"):
+        batch_paths = image_paths[i : i + batch_size]
+        batch_labels = image_labels[i : i + batch_size]
         
-        # Load Image
-        try:
-            image = Image.open(img_path).convert("RGB")
-        except Exception:
-            continue
+        # Load images
+        batch_images = []
+        valid_indices = [] 
+        for idx, p in enumerate(batch_paths):
+            try:
+                img = Image.open(p).convert("RGB")
+                batch_images.append(img)
+                valid_indices.append(idx)
+            except Exception:
+                pass
+        
+        if not batch_images: continue
 
         # Inference
         with torch.no_grad():
             if model_type == "hf":
-                inputs = processor(images=image, return_tensors="pt")
+                inputs = processor(images=batch_images, return_tensors="pt").to(device)
                 outputs = model(**inputs, output_hidden_states=True)
-                logits = outputs.logits[0]
+                logits = outputs.logits
                 
                 # Embeddings
                 if outputs.hidden_states:
-                    last_hidden = outputs.hidden_states[-1][0]
-                    if last_hidden.dim() == 2: # ViT [seq, dim]
-                        emb = last_hidden.mean(dim=0)
-                        feature_map = None 
-                    elif last_hidden.dim() == 3: # CNN [C, H, W]
-                        emb = last_hidden.mean(dim=[1, 2])
-                        feature_map = last_hidden.mean(dim=0) # [H, W]
+                    last_hidden = outputs.hidden_states[-1] # [B, seq, dim] or [B, C, H, W]
+                    if last_hidden.dim() == 3: # ViT [B, seq, dim]
+                        emb = last_hidden.mean(dim=1)
+                    elif last_hidden.dim() == 4: # CNN [B, C, H, W]
+                        emb = last_hidden.mean(dim=[2, 3])
                     else:
                         emb = last_hidden
-                        feature_map = None
-                    embeddings.append(emb.numpy())
+                    embeddings.extend(emb.cpu().numpy())
                 else:
-                    embeddings.append(logits.numpy())
-                    feature_map = None
+                    embeddings.extend(logits.cpu().numpy())
 
             elif model_type == "timm":
-                input_tensor = processor(image).unsqueeze(0)
+                # Stack tensors for batch
+                tensors = [processor(img) for img in batch_images]
+                input_tensor = torch.stack(tensors).to(device)
+                
                 try:
                     features = model.forward_features(input_tensor)
-                    if features.dim() == 4: # CNN
-                        emb = features.mean(dim=[2, 3])[0]
-                        feature_map = features[0].mean(dim=0)
-                    elif features.dim() == 3: # ViT
-                        emb = features.mean(dim=1)[0]
-                        feature_map = None
+                    if features.dim() == 4: # CNN [B, C, H, W]
+                        emb = features.mean(dim=[2, 3])
+                    elif features.dim() == 3: # ViT [B, seq, dim]
+                        emb = features.mean(dim=1)
                     else:
-                        emb = features[0]
-                        feature_map = None
-                    embeddings.append(emb.numpy())
+                        emb = features
+                    embeddings.extend(emb.cpu().numpy())
                     
                     logits = model.forward_head(features) if hasattr(model, 'forward_head') else model(input_tensor)
-                    logits = logits[0]
                 except Exception:
-                    logits = model(input_tensor)[0]
-                    embeddings.append(logits.numpy())
-                    feature_map = None
+                    logits = model(input_tensor)
+                    embeddings.extend(logits.cpu().numpy())
 
-        # Metrics
-        probs = torch.nn.functional.softmax(logits, dim=0)
-        sorted_indices = torch.argsort(probs, descending=True)
+        # Metrics Calculation
+        probs = torch.nn.functional.softmax(logits, dim=1)
+        sorted_indices = torch.argsort(probs, descending=True, dim=1)
         
-        # Rank (MRR)
-        try:
-            rank = (sorted_indices == gt_id).nonzero(as_tuple=True)[0].item() + 1
-            ranks.append(1.0 / rank)
-        except Exception:
-            ranks.append(0)
+        for j, valid_idx in enumerate(valid_indices):
+            gt_label = batch_labels[valid_idx]
+            gt_id = label2id[gt_label]
+            
+            # Rank (MRR)
+            try:
+                # Find where sorted_indices[j] == gt_id
+                rank = (sorted_indices[j] == gt_id).nonzero(as_tuple=True)[0].item() + 1
+                ranks.append(1.0 / rank)
+            except Exception:
+                ranks.append(0)
 
-        # Top-1
-        if sorted_indices[0] == gt_id:
-            top1_correct += 1
-            
-        # Top-5
-        if gt_id in sorted_indices[:5]:
-            top5_correct += 1
-            
-        true_labels.append(gt_label)
-        total_processed += 1
-        
-        # Collect AM sample (limit to 3)
-        if feature_map is not None and len(am_images) < 3:
-            am_images.append((image, feature_map.cpu().numpy()))
+            # Top-1
+            if sorted_indices[j][0] == gt_id:
+                top1_correct += 1
+                
+            # Top-5
+            if gt_id in sorted_indices[j][:5]:
+                top5_correct += 1
+                
+            true_labels.append(gt_label)
+            total_processed += 1
 
     if total_processed == 0:
         return "No valid labeled images found.", None, None, None
@@ -405,25 +431,8 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     # Generate t-SNE Plot
     tsne_fig = plot_tsne(embeddings, true_labels, mrr)
     
-    # Generate AM Plot
-    am_fig = None
-    if am_images:
-        import matplotlib.pyplot as plt
-        fig, axes = plt.subplots(1, len(am_images), figsize=(15, 5))
-        if len(am_images) == 1: axes = [axes]
-        
-        for ax, (img, fmap) in zip(axes, am_images):
-            ax.imshow(img)
-            fmap_img = Image.fromarray(fmap)
-            fmap_resized = fmap_img.resize((img.width, img.height), resample=Image.BILINEAR)
-            fmap_arr = np.array(fmap_resized)
-            fmap_arr = (fmap_arr - fmap_arr.min()) / (fmap_arr.max() - fmap_arr.min() + 1e-8)
-            ax.imshow(fmap_arr, cmap='jet', alpha=0.5)
-            ax.axis('off')
-            ax.set_title("Activation Map (Avg Channels)")
-        
-        plt.tight_layout()
-        am_fig = fig
+    # Generate Metrics Plot
+    metrics_fig = plot_metrics(mrr, top1_acc, top5_acc)
 
     # Prepare results dict for export
     results_dict = {
@@ -433,11 +442,10 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
         "total": total_processed,
         "embeddings": embeddings, 
         "true_labels": true_labels,
-        "text_report": result_text,
-        "am_images": am_images # Pass images for re-saving if needed
+        "text_report": result_text
     }
 
-    return result_text, tsne_fig, am_fig, results_dict
+    return result_text, tsne_fig, metrics_fig, results_dict
 
 
 def save_evaluation_results(results_dict, output_dir):
@@ -460,8 +468,7 @@ def save_evaluation_results(results_dict, output_dir):
             "total_images": results_dict.get("total"),
             "text_report": results_dict.get("text_report"),
             "true_labels": results_dict.get("true_labels"),
-            # Embeddings might be large, but user asked for "as much details as you can"
-            # "embeddings": embeddings_list 
+            "embeddings": embeddings_list 
         }
         
         with open(os.path.join(output_dir, "evaluation_results.json"), "w", encoding="utf-8") as f:
@@ -479,25 +486,13 @@ def save_evaluation_results(results_dict, output_dir):
                 fig.savefig(os.path.join(output_dir, "tsne_plot.png"))
                 plt.close(fig)
         
-        # Activation Maps
-        am_images = results_dict.get("am_images")
-        if am_images:
-            import matplotlib.pyplot as plt
-            fig, axes = plt.subplots(1, len(am_images), figsize=(15, 5))
-            if len(am_images) == 1: axes = [axes]
-            
-            for ax, (img, fmap) in zip(axes, am_images):
-                ax.imshow(img)
-                fmap_img = Image.fromarray(fmap)
-                fmap_resized = fmap_img.resize((img.width, img.height), resample=Image.BILINEAR)
-                fmap_arr = np.array(fmap_resized)
-                fmap_arr = (fmap_arr - fmap_arr.min()) / (fmap_arr.max() - fmap_arr.min() + 1e-8)
-                ax.imshow(fmap_arr, cmap='jet', alpha=0.5)
-                ax.axis('off')
-                ax.set_title("Activation Map")
-            
-            plt.tight_layout()
-            fig.savefig(os.path.join(output_dir, "activation_maps.png"))
+        # Metrics Plot
+        mrr = results_dict.get("mrr")
+        top1 = results_dict.get("top1")
+        top5 = results_dict.get("top5")
+        if mrr is not None:
+            fig = plot_metrics(mrr, top1, top5)
+            fig.savefig(os.path.join(output_dir, "metrics_plot.png"))
             plt.close(fig)
                 
         return f"Successfully saved evaluation results to {output_dir}"
