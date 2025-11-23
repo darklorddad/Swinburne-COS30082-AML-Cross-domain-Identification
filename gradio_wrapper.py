@@ -19,6 +19,7 @@ import queue
 import threading
 import re
 import json
+import tempfile
 from sklearn.manifold import TSNE
 
 from utils import (
@@ -286,6 +287,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
                 norm_model_labels[normalize_name(parts[1])] = k
     
     found_folders = []
+    skipped_folders = []
     
     for root, dirs, files in os.walk(test_dir):
         if os.path.abspath(root) == os.path.abspath(test_dir):
@@ -303,6 +305,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
             matched_label = norm_model_labels[normalize_name(folder_name)]
         
         if not matched_label:
+            skipped_folders.append(folder_name)
             continue
             
         for f in files:
@@ -324,11 +327,15 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
         raise gr.Error(msg)
 
     true_labels = []
-    embeddings = []
     ranks = []
     top1_correct = 0
     top5_correct = 0
     total_processed = 0
+    
+    # Use a temporary file to store embeddings to avoid OOM on large datasets
+    embeddings_file = tempfile.NamedTemporaryFile(delete=False, suffix='.npy')
+    embeddings_path = embeddings_file.name
+    embeddings_file.close()
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -337,116 +344,163 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     batch_size = 32
     progress = gr.Progress()
     
-    # Batch processing loop
-    for i in progress.tqdm(range(0, len(image_paths), batch_size), desc="Evaluating"):
-        batch_paths = image_paths[i : i + batch_size]
-        batch_labels = image_labels[i : i + batch_size]
-        
-        # Load images
-        batch_images = []
-        valid_indices = [] 
-        for idx, p in enumerate(batch_paths):
-            try:
-                img = Image.open(p).convert("RGB")
-                batch_images.append(img)
-                valid_indices.append(idx)
-            except Exception:
-                pass
-        
-        if not batch_images: continue
-
-        # Inference
-        with torch.no_grad():
-            if model_type == "hf":
-                inputs = processor(images=batch_images, return_tensors="pt").to(device)
-                outputs = model(**inputs, output_hidden_states=True)
-                logits = outputs.logits
+    try:
+        with open(embeddings_path, 'wb') as f_emb:
+            # Batch processing loop
+            for i in progress.tqdm(range(0, len(image_paths), batch_size), desc="Evaluating"):
+                batch_paths = image_paths[i : i + batch_size]
+                batch_labels = image_labels[i : i + batch_size]
                 
-                # Embeddings
-                if outputs.hidden_states:
-                    last_hidden = outputs.hidden_states[-1] # [B, seq, dim] or [B, C, H, W]
-                    if last_hidden.dim() == 3: # ViT [B, seq, dim]
-                        emb = last_hidden.mean(dim=1)
-                    elif last_hidden.dim() == 4: # CNN [B, C, H, W]
-                        emb = last_hidden.mean(dim=[2, 3])
-                    else:
-                        emb = last_hidden
-                    embeddings.extend(emb.cpu().numpy())
-                else:
-                    embeddings.extend(logits.cpu().numpy())
-
-            elif model_type == "timm":
-                # Stack tensors for batch
-                tensors = [processor(img) for img in batch_images]
-                input_tensor = torch.stack(tensors).to(device)
+                # Load images
+                batch_images = []
+                valid_indices = [] 
+                for idx, p in enumerate(batch_paths):
+                    try:
+                        img = Image.open(p).convert("RGB")
+                        batch_images.append(img)
+                        valid_indices.append(idx)
+                    except Exception:
+                        pass
                 
-                try:
-                    features = model.forward_features(input_tensor)
-                    if features.dim() == 4: # CNN [B, C, H, W]
-                        emb = features.mean(dim=[2, 3])
-                    elif features.dim() == 3: # ViT [B, seq, dim]
-                        emb = features.mean(dim=1)
-                    else:
-                        emb = features
-                    embeddings.extend(emb.cpu().numpy())
+                if not batch_images: continue
+
+                # Inference
+                with torch.no_grad():
+                    batch_emb_numpy = None
                     
-                    logits = model.forward_head(features) if hasattr(model, 'forward_head') else model(input_tensor)
-                except Exception:
-                    logits = model(input_tensor)
-                    embeddings.extend(logits.cpu().numpy())
+                    if model_type == "hf":
+                        inputs = processor(images=batch_images, return_tensors="pt").to(device)
+                        outputs = model(**inputs, output_hidden_states=True)
+                        logits = outputs.logits
+                        
+                        # Robust Feature Extraction
+                        if hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
+                            batch_emb_numpy = outputs.pooler_output.cpu().numpy()
+                        elif outputs.hidden_states:
+                            last_hidden = outputs.hidden_states[-1]
+                            if last_hidden.dim() == 4: # [B, C, H, W]
+                                batch_emb_numpy = last_hidden.mean(dim=[2, 3]).cpu().numpy()
+                            elif last_hidden.dim() == 3: # [B, Seq, Dim]
+                                batch_emb_numpy = last_hidden.mean(dim=1).cpu().numpy()
+                            else:
+                                batch_emb_numpy = last_hidden.cpu().numpy()
+                        else:
+                            batch_emb_numpy = logits.cpu().numpy()
 
-        # Metrics Calculation
-        probs = torch.nn.functional.softmax(logits, dim=1)
-        sorted_indices = torch.argsort(probs, descending=True, dim=1)
+                    elif model_type == "timm":
+                        tensors = [processor(img) for img in batch_images]
+                        input_tensor = torch.stack(tensors).to(device)
+                        
+                        try:
+                            # Try to get features
+                            features = model.forward_features(input_tensor)
+                            
+                            # Robust Pooling
+                            if features.dim() == 4: # [B, C, H, W]
+                                batch_emb_numpy = features.mean(dim=[2, 3]).cpu().numpy()
+                            elif features.dim() == 3: # [B, Seq, Dim]
+                                # Try to find global pool if possible, else mean
+                                if hasattr(model, 'global_pool'):
+                                    batch_emb_numpy = features.mean(dim=1).cpu().numpy()
+                                else:
+                                    batch_emb_numpy = features.mean(dim=1).cpu().numpy()
+                            else:
+                                batch_emb_numpy = features.cpu().numpy()
+                            
+                            # Get logits
+                            if hasattr(model, 'forward_head'):
+                                logits = model.forward_head(features)
+                            else:
+                                logits = model(input_tensor)
+                        except Exception:
+                            # Fallback
+                            logits = model(input_tensor)
+                            batch_emb_numpy = logits.cpu().numpy()
+
+                    # Save embeddings to disk
+                    if batch_emb_numpy is not None:
+                        np.save(f_emb, batch_emb_numpy)
+
+                # Metrics Calculation
+                probs = torch.nn.functional.softmax(logits, dim=1)
+                sorted_indices = torch.argsort(probs, descending=True, dim=1)
+                
+                for j, valid_idx in enumerate(valid_indices):
+                    gt_label = batch_labels[valid_idx]
+                    gt_id = label2id[gt_label]
+                    
+                    # Rank (MRR)
+                    try:
+                        rank = (sorted_indices[j] == gt_id).nonzero(as_tuple=True)[0].item() + 1
+                        ranks.append(1.0 / rank)
+                    except Exception:
+                        ranks.append(0)
+
+                    # Top-1
+                    if sorted_indices[j][0] == gt_id:
+                        top1_correct += 1
+                        
+                    # Top-5
+                    if gt_id in sorted_indices[j][:5]:
+                        top5_correct += 1
+                        
+                    true_labels.append(gt_label)
+                    total_processed += 1
         
-        for j, valid_idx in enumerate(valid_indices):
-            gt_label = batch_labels[valid_idx]
-            gt_id = label2id[gt_label]
+        if total_processed == 0:
+            raise gr.Error("No valid labeled images found.")
+
+        # Calculate final metrics
+        mrr = np.mean(ranks)
+        top1_acc = top1_correct / total_processed
+        top5_acc = top5_correct / total_processed
+        
+        # Load embeddings back for t-SNE (handling memory limit)
+        embeddings_list = []
+        try:
+            with open(embeddings_path, 'rb') as f_emb:
+                while True:
+                    try:
+                        batch = np.load(f_emb)
+                        embeddings_list.extend(batch)
+                    except (ValueError, EOFError, OSError):
+                        break
+        except (FileNotFoundError, OSError):
+            pass
             
-            # Rank (MRR)
-            try:
-                # Find where sorted_indices[j] == gt_id
-                rank = (sorted_indices[j] == gt_id).nonzero(as_tuple=True)[0].item() + 1
-                ranks.append(1.0 / rank)
-            except Exception:
-                ranks.append(0)
-
-            # Top-1
-            if sorted_indices[j][0] == gt_id:
-                top1_correct += 1
-                
-            # Top-5
-            if gt_id in sorted_indices[j][:5]:
-                top5_correct += 1
-                
-            true_labels.append(gt_label)
-            total_processed += 1
+        # If too many embeddings, downsample for t-SNE to avoid OOM/Freeze
+        MAX_TSNE_SAMPLES = 3000
+        tsne_embeddings = embeddings_list
+        tsne_labels = true_labels
         
-    if total_processed == 0:
-        raise gr.Error("No valid labeled images found.")
+        if len(embeddings_list) > MAX_TSNE_SAMPLES:
+            indices = np.random.choice(len(embeddings_list), MAX_TSNE_SAMPLES, replace=False)
+            tsne_embeddings = [embeddings_list[i] for i in indices]
+            tsne_labels = [true_labels[i] for i in indices]
+        
+        # Generate t-SNE Plot
+        tsne_fig = plot_tsne(tsne_embeddings, tsne_labels, mrr)
+        
+        # Generate Metrics Plot
+        metrics_fig = plot_metrics(mrr, top1_acc, top5_acc)
 
-    # Calculate final metrics
-    mrr = np.mean(ranks)
-    top1_acc = top1_correct / total_processed
-    top5_acc = top5_correct / total_processed
-    
-    # Generate t-SNE Plot
-    tsne_fig = plot_tsne(embeddings, true_labels, mrr)
-    
-    # Generate Metrics Plot
-    metrics_fig = plot_metrics(mrr, top1_acc, top5_acc)
+        # Prepare results dict for export
+        results_dict = {
+            "mrr": mrr,
+            "top1": top1_acc,
+            "top5": top5_acc,
+            "total": total_processed,
+            "embeddings": embeddings_list, 
+            "true_labels": true_labels,
+            "skipped_folders": skipped_folders
+        }
 
-    # Prepare results dict for export
-    results_dict = {
-        "mrr": mrr,
-        "top1": top1_acc,
-        "top5": top5_acc,
-        "total": total_processed,
-        "embeddings": embeddings, 
-        "true_labels": true_labels
-    }
+        return tsne_fig, metrics_fig, results_dict
 
-    return tsne_fig, metrics_fig, results_dict
+    finally:
+        # Cleanup temp file
+        if os.path.exists(embeddings_path):
+            os.remove(embeddings_path)
 
 
 def save_evaluation_results(results_dict, output_dir):
@@ -467,6 +521,7 @@ def save_evaluation_results(results_dict, output_dir):
             "top1_accuracy": results_dict.get("top1"),
             "top5_accuracy": results_dict.get("top5"),
             "total_images": results_dict.get("total"),
+            "skipped_folders": results_dict.get("skipped_folders", []),
             "true_labels": results_dict.get("true_labels"),
             "embeddings": embeddings_list 
         }
