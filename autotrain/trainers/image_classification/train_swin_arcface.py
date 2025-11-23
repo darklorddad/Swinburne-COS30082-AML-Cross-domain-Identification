@@ -71,13 +71,21 @@ class SwinArcFaceModel(nn.Module):
         self.backbone = AutoModel.from_pretrained(
             config._name_or_path,
             config=config,
-            add_pooling_layer=True,  # Ensure we get a pooled output
             trust_remote_code=ALLOW_REMOTE_CODE,
         )
 
-        # SwinV2 typically outputs hidden_size.
-        # We might need a projection layer if dimensions don't match or for bottleneck.
-        self.embedding_dim = config.hidden_size
+        # Determine embedding dimension
+        if hasattr(config, "hidden_size"):
+            self.embedding_dim = config.hidden_size
+        elif hasattr(config, "d_model"):
+            self.embedding_dim = config.d_model
+        elif hasattr(config, "hidden_sizes"):
+            self.embedding_dim = config.hidden_sizes[-1]
+        else:
+            raise ValueError(
+                "Could not determine embedding dimension from config. "
+                "Please ensure the model config has 'hidden_size', 'd_model', or 'hidden_sizes'."
+            )
 
         self.head = ArcFaceHead(
             in_features=self.embedding_dim,
@@ -91,11 +99,17 @@ class SwinArcFaceModel(nn.Module):
     def forward(self, pixel_values, labels=None):
         outputs = self.backbone(pixel_values=pixel_values)
         # Use pooled output (often pooler_output or last_hidden_state mean)
-        if hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
+        if hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
             embeds = outputs.pooler_output
         else:
             # Fallback for models without pooler: mean of last hidden state
-            embeds = outputs.last_hidden_state.mean(dim=1)
+            hidden_state = outputs.last_hidden_state
+            if len(hidden_state.shape) == 4:
+                # CNN: (B, C, H, W) -> Global Average Pooling -> (B, C)
+                embeds = hidden_state.mean(dim=[2, 3])
+            else:
+                # Transformer: (B, S, D) -> Mean Pooling -> (B, D)
+                embeds = hidden_state.mean(dim=1)
 
         logits = self.head(embeds, labels)
 
