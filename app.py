@@ -147,8 +147,8 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         
         with gr.Column(visible=False) as eval_results_container:
             with gr.Row():
-                eval_plot_tsne = gr.Plot(label="t-SNE Visualisation", value=get_placeholder_plot)
-                eval_plot_metrics = gr.Plot(label="Metrics", value=get_placeholder_plot)
+                eval_plot_tsne = gr.Plot(label="t-SNE Visualisation", value=get_placeholder_plot())
+                eval_plot_metrics = gr.Plot(label="Metrics", value=get_placeholder_plot())
 
         # Logic
         def update_eval_inputs(source):
