@@ -41,6 +41,12 @@ def train(config):
     if isinstance(config, dict):
         config = ImageClassificationParams(**config)
 
+    if config.trainer == "arcface":
+        from autotrain.trainers.image_classification.train_arcface import train as train_arcface
+
+        train_arcface(config)
+        return
+
     valid_data = None
     if config.data_path == f"{config.project_name}/autotrain-data":
         train_data = load_from_disk(config.data_path)[config.train_split]

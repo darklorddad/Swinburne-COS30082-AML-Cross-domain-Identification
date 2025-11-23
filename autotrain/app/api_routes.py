@@ -264,6 +264,7 @@ class APICreateProjectModel(BaseModel):
         "st:triplet",
         "st:qa",
         "image-classification",
+        "image-classification:arcface",
         "seq2seq",
         "token-classification",
         "text-classification",
@@ -394,7 +395,7 @@ class APICreateProjectModel(BaseModel):
             if not values.get("column_mapping").get("target_column"):
                 raise ValueError("target_column is required for seq2seq")
             values["column_mapping"] = Seq2SeqColumnMapping(**values["column_mapping"])
-        elif values.get("task") == "image-classification":
+        elif values.get("task").startswith("image-classification"):
             if not values.get("column_mapping"):
                 raise ValueError("column_mapping is required for image-classification")
             if not values.get("column_mapping").get("image_column"):
@@ -551,7 +552,7 @@ class APICreateProjectModel(BaseModel):
             values["params"] = LLMRewardTrainingParamsAPI(**values["params"])
         elif values.get("task") == "seq2seq":
             values["params"] = Seq2SeqParamsAPI(**values["params"])
-        elif values.get("task") == "image-classification":
+        elif values.get("task").startswith("image-classification"):
             values["params"] = ImageClassificationParamsAPI(**values["params"])
         elif values.get("task") == "tabular-classification":
             values["params"] = TabularClassificationParamsAPI(**values["params"])
@@ -660,6 +661,11 @@ async def api_create_project(project: APICreateProjectModel, token: bool = Depen
         params = PARAMS["vlm"]
         trainer = task.split(":")[1]
         params.update({"trainer": trainer})
+    elif task.startswith("image-classification"):
+        params = PARAMS["image-classification"]
+        if ":" in task:
+            trainer = task.split(":")[1]
+            params.update({"trainer": trainer})
     elif task.startswith("tabular"):
         params = PARAMS["tabular"]
     else:
