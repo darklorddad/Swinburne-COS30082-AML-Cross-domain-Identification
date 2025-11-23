@@ -126,7 +126,27 @@ class ArcFaceClassifier(nn.Module):
         super().__init__()
         # Create backbone without the classification head (num_classes=0)
         # global_pool='' ensures we get spatial features for CNNs to apply GeM
-        self.backbone = timm.create_model(model_name, pretrained=pretrained, num_classes=0, global_pool="")
+
+        # Sanitize model name for timm
+        if "/" in model_name:
+            model_name = model_name.split("/")[-1]
+
+        candidates = [
+            model_name,
+            model_name.replace("-", "_"),
+            model_name.replace("-", ""),
+        ]
+
+        self.backbone = None
+        for name in candidates:
+            try:
+                self.backbone = timm.create_model(name, pretrained=pretrained, num_classes=0, global_pool="")
+                break
+            except Exception:
+                pass
+
+        if self.backbone is None:
+            raise ValueError(f"Could not find a compatible timm model for {model_name}")
 
         # Auto-detect feature dimension
         try:
@@ -188,7 +208,7 @@ class ArcFaceClassifier(nn.Module):
         return {"loss": loss, "logits": output}
 
 
-def process_data(train_data, valid_data, image_processor, config):
+def process_data(train_data, valid_data, image_processor, config, model=None):
     """
     Processes training and validation data for image classification.
 
@@ -197,13 +217,17 @@ def process_data(train_data, valid_data, image_processor, config):
         valid_data (Dataset or None): The validation dataset. Can be None if no validation data is provided.
         image_processor (ImageProcessor): An object containing image processing parameters such as size, mean, and std.
         config (dict): Configuration dictionary containing additional parameters for dataset processing.
+        model (nn.Module, optional): The model instance to resolve data config from.
 
     Returns:
         tuple: A tuple containing the processed training dataset and the processed validation dataset (or None if no validation data is provided).
     """
     # Resolve optimal normalization for the specific backbone
     try:
-        data_config = timm.data.resolve_data_config({}, model=config.model)
+        if model is not None and hasattr(model, "backbone"):
+            data_config = timm.data.resolve_data_config({}, model=model.backbone)
+        else:
+            data_config = timm.data.resolve_data_config({}, model=config.model)
         mean = data_config["mean"]
         std = data_config["std"]
         # Use image_processor size if available, else config default from timm

@@ -116,7 +116,7 @@ def train(config):
     except Exception:
         image_processor = None
 
-    train_data, valid_data = utils.process_data(train_data, valid_data, image_processor, config)
+    train_data, valid_data = utils.process_data(train_data, valid_data, image_processor, config, model=model)
 
     if config.logging_steps == -1:
         if config.valid_split is not None:
