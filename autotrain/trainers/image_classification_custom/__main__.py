@@ -4,6 +4,7 @@ import os
 
 import torch
 from accelerate.state import PartialState
+from safetensors.torch import save_file as safe_save_file
 from datasets import load_dataset, load_from_disk
 from huggingface_hub import HfApi
 from transformers import (
@@ -71,8 +72,8 @@ class CustomTrainer(Trainer):
 
         os.makedirs(output_dir, exist_ok=True)
 
-        # Save weights
-        torch.save(self.model.state_dict(), os.path.join(output_dir, "pytorch_model.bin"))
+        # Save weights in safetensors format
+        safe_save_file(self.model.state_dict(), os.path.join(output_dir, "model.safetensors"))
 
         # Save config.json
         if self.custom_config:
@@ -278,11 +279,11 @@ def train(config):
     inference_notes = f"""
 # Inference Notes
 
-To load this model, you need to instantiate the `ArcFaceClassifier` class with the same arguments used during training, and then load the weights.
+To load this model, you need to instantiate the `ArcFaceClassifier` class with the same arguments used during training, and then load the weights using `safetensors`.
 
 ```python
 from autotrain.trainers.image_classification_custom.utils import ArcFaceClassifier
-import torch
+from safetensors.torch import load_file
 
 model = ArcFaceClassifier(
     model_name="{config.model}",
@@ -290,7 +291,7 @@ model = ArcFaceClassifier(
     s={config.arcface_s},
     m={config.arcface_m}
 )
-model.load_state_dict(torch.load("pytorch_model.bin"))
+model.load_state_dict(load_file("model.safetensors"))
 model.eval()
 ```
 """
