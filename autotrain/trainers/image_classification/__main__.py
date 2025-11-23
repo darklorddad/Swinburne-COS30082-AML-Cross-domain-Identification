@@ -41,8 +41,8 @@ def train(config):
     if isinstance(config, dict):
         config = ImageClassificationParams(**config)
 
-    if config.trainer == "swin_arcface":
-        from autotrain.trainers.image_classification.train_swin_arcface import train as train_arcface
+    if config.trainer == "arcface":
+        from autotrain.trainers.image_classification.train_arcface import train as train_arcface
 
         train_arcface(config)
         return

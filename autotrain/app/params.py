@@ -95,10 +95,10 @@ PARAMS["image-classification"] = ImageClassificationParams(
     mixed_precision="fp16",
     log="tensorboard",
 ).model_dump()
-PARAMS["image-classification:swin-arcface"] = ImageClassificationParams(
+PARAMS["image-classification:arcface"] = ImageClassificationParams(
     mixed_precision="fp16",
     log="tensorboard",
-    trainer="swin_arcface",
+    trainer="arcface",
 ).model_dump()
 PARAMS["image-object-detection"] = ObjectDetectionParams(
     mixed_precision="fp16",
@@ -674,7 +674,7 @@ def get_task_params(task, param_type):
         ]
         task_params = {k: v for k, v in task_params.items() if k not in more_hidden_params}
     if task == "image-classification":
-        if trainer != "swin-arcface":
+        if trainer != "arcface":
             task_params = {
                 k: v for k, v in task_params.items() if k not in ["arcface_s", "arcface_m", "sub_centers"]
             }

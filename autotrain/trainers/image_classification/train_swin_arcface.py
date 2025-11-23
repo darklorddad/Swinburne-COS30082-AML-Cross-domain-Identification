@@ -63,7 +63,7 @@ class ArcFaceHead(nn.Module):
         return cosine * self.s
 
 
-class SwinArcFaceModel(nn.Module):
+class ArcFaceModel(nn.Module):
     def __init__(self, config, num_labels, arcface_args):
         super().__init__()
         self.config = config
@@ -188,7 +188,7 @@ def train(config):
     model_config = AutoConfig.from_pretrained(config.model, trust_remote_code=ALLOW_REMOTE_CODE, token=config.token)
 
     # Initialize Custom Model
-    model = SwinArcFaceModel(
+    model = ArcFaceModel(
         config=model_config,
         num_labels=num_classes,
         arcface_args={
