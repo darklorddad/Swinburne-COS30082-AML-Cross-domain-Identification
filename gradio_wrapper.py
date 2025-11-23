@@ -160,6 +160,48 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, input_ima
     return {}
 
 
+def launch_tensorboard(log_dir: str, venv_parent_dir: str):
+    """Launches TensorBoard in a detached terminal using a specific venv."""
+    if not log_dir or not os.path.isdir(log_dir):
+        return "Error: Please provide a valid log directory."
+    if not venv_parent_dir or not os.path.isdir(venv_parent_dir):
+        return "Error: Please provide a valid parent directory for the venv."
+
+    # Construct path to activate.bat (assuming Windows structure based on context)
+    activate_script = os.path.join(venv_parent_dir, "venv", "Scripts", "activate.bat")
+    if not os.path.exists(activate_script):
+        return f"Error: Could not find activation script at: {activate_script}"
+
+    # Construct the chained command
+    # cmd /k keeps the window open. "call" is needed to run the bat file.
+    command_str = f'call "{activate_script}" && tensorboard --logdir "{log_dir}"'
+    full_command = ["cmd.exe", "/k", command_str]
+    tb_url = "http://localhost:6006"
+
+    try:
+        # Launch detached process
+        subprocess.Popen(full_command, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        
+        # Wait and check if it comes alive
+        start_time = time.time()
+        timeout = 20
+        
+        while time.time() - start_time < timeout:
+            try:
+                response = requests.get(tb_url, timeout=0.5)
+                if response.status_code == 200:
+                    webbrowser.open(tb_url)
+                    return f"Success: TensorBoard launched in a new window.\nURL: {tb_url}"
+            except (requests.ConnectionError, requests.Timeout):
+                pass
+            time.sleep(1)
+            
+        return f"Process launched, but failed to respond at {tb_url} within {timeout} seconds.\nPlease check the console window."
+
+    except Exception as e:
+        return f"Failed to launch TensorBoard: {e}"
+
+
 def launch_autotrain_ui(autotrain_path: str):
     """Launches the AutoTrain Gradio UI in a separate detached process."""
     if not autotrain_path or not os.path.isdir(autotrain_path):

@@ -2,7 +2,7 @@ import os
 import gradio as gr
 from gradio_wrapper import (
     classify_plant, show_model_charts, get_model_choices, update_model_choices,
-    launch_autotrain_ui, generate_manifest,
+    launch_autotrain_ui, launch_tensorboard, generate_manifest,
     split_dataset, check_dataset_balance, check_dataset_splittability,
     clean_dataset_names, save_metrics
 )
@@ -138,15 +138,29 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         )
 
     with gr.Tab("Training"):
-        train_autotrain_path = gr.Textbox(label="Path to AutoTrain folder")
-        train_launch_button = gr.Button("Launch AutoTrain UI")
-        train_launch_log = gr.Textbox(label="Status", interactive=False, lines=2)
-        
-        train_launch_button.click(
-            fn=launch_autotrain_ui,
-            inputs=[train_autotrain_path],
-            outputs=[train_launch_log]
-        )
+        with gr.Group():
+            gr.Markdown("### AutoTrain")
+            train_autotrain_path = gr.Textbox(label="Path to AutoTrain folder")
+            train_launch_button = gr.Button("Launch AutoTrain UI")
+            train_launch_log = gr.Textbox(label="Status", interactive=False, lines=2)
+            
+            train_launch_button.click(
+                fn=launch_autotrain_ui,
+                inputs=[train_autotrain_path],
+                outputs=[train_launch_log]
+            )
+
+        with gr.Accordion("TensorBoard", open=False):
+            tb_log_dir = gr.Textbox(label="Log directory")
+            tb_venv_dir = gr.Textbox(label="Venv parent directory (folder containing 'venv')")
+            tb_launch_btn = gr.Button("Launch TensorBoard")
+            tb_status = gr.Textbox(label="Status", interactive=False, lines=2)
+
+            tb_launch_btn.click(
+                fn=launch_tensorboard,
+                inputs=[tb_log_dir, tb_venv_dir],
+                outputs=[tb_status]
+            )
 
     with gr.Tab("Dataset preparation"):
         
