@@ -569,8 +569,7 @@ def launch_tensorboard(log_dir: str, venv_parent_dir: str):
 
     # Construct the chained command
     # cmd /k keeps the window open. "call" is needed to run the bat file.
-    command_str = f'call "{activate_script}" && tensorboard --logdir "{log_dir}"'
-    full_command = ["cmd.exe", "/k", command_str]
+    full_command = f'cmd.exe /k call "{activate_script}" && tensorboard --logdir "{log_dir}"'
     tb_url = "http://localhost:6006"
 
     try:
