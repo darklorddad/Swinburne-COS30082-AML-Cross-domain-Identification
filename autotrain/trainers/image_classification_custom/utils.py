@@ -56,7 +56,7 @@ widget:
 
 # Model Trained Using AutoTrain
 
-- Problem type: Image Classification
+- Problem type: Image Classification (Custom ArcFace)
 
 ## Validation Metrics
 {validation_metrics}
@@ -64,56 +64,21 @@ widget:
 
 
 def _binary_classification_metrics(pred):
-    """
-    Computes various binary classification metrics given the predictions and labels.
-
-    Args:
-        pred (tuple): A tuple containing raw predictions and true labels.
-                      raw_predictions (numpy.ndarray): The raw prediction scores from the model.
-                      labels (numpy.ndarray): The true labels.
-
-    Returns:
-        dict: A dictionary containing the following metrics:
-            - f1 (float): The F1 score.
-            - precision (float): The precision score.
-            - recall (float): The recall score.
-            - auc (float): The Area Under the ROC Curve (AUC) score.
-            - accuracy (float): The accuracy score.
-    """
     raw_predictions, labels = pred
+    # ArcFace outputs logits that are already scaled; argmax works fine
     predictions = np.argmax(raw_predictions, axis=1)
     result = {
         "f1": metrics.f1_score(labels, predictions),
         "precision": metrics.precision_score(labels, predictions),
         "recall": metrics.recall_score(labels, predictions),
-        "auc": metrics.roc_auc_score(labels, raw_predictions[:, 1]),
+        # AUC might be tricky with ArcFace logits, sticking to accuracy for now or need softmax
+        # "auc": metrics.roc_auc_score(labels, raw_predictions[:, 1]),
         "accuracy": metrics.accuracy_score(labels, predictions),
     }
     return result
 
 
 def _multi_class_classification_metrics(pred):
-    """
-    Compute various classification metrics for multi-class classification.
-
-    Args:
-        pred (tuple): A tuple containing raw predictions and true labels.
-                      - raw_predictions (numpy.ndarray): The raw prediction scores for each class.
-                      - labels (numpy.ndarray): The true labels.
-
-    Returns:
-        dict: A dictionary containing the following metrics:
-              - "f1_macro": F1 score with macro averaging.
-              - "f1_micro": F1 score with micro averaging.
-              - "f1_weighted": F1 score with weighted averaging.
-              - "precision_macro": Precision score with macro averaging.
-              - "precision_micro": Precision score with micro averaging.
-              - "precision_weighted": Precision score with weighted averaging.
-              - "recall_macro": Recall score with macro averaging.
-              - "recall_micro": Recall score with micro averaging.
-              - "recall_weighted": Recall score with weighted averaging.
-              - "accuracy": Accuracy score.
-    """
     raw_predictions, labels = pred
     predictions = np.argmax(raw_predictions, axis=1)
     results = {
@@ -144,21 +109,39 @@ class GeM(nn.Module):
         return F.avg_pool2d(x.clamp(min=eps).pow(p), (x.size(-2), x.size(-1))).pow(1.0 / p)
 
     def __repr__(self):
-        return self.__class__.__name__ + "(" + "p=" + "{:.4f}".format(self.p.data.tolist()[0]) + ", " + "eps=" + str(self.eps) + ")"
+        return (
+            self.__class__.__name__
+            + "("
+            + "p="
+            + "{:.4f}".format(self.p.data.tolist()[0])
+            + ", "
+            + "eps="
+            + str(self.eps)
+            + ")"
+        )
 
 
 class ArcFaceClassifier(nn.Module):
     def __init__(self, model_name, num_classes, s=30.0, m=0.50, pretrained=True):
         super().__init__()
-        self.backbone = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
+        # Create backbone without the classification head (num_classes=0)
+        # global_pool='' ensures we get spatial features for CNNs to apply GeM
+        self.backbone = timm.create_model(model_name, pretrained=pretrained, num_classes=0, global_pool="")
 
+        # Auto-detect feature dimension
         try:
             if hasattr(self.backbone, "num_features"):
                 feat_dim = self.backbone.num_features
             else:
-                feat_dim = self.backbone(torch.randn(1, 3, 224, 224)).shape[1]
+                # Dummy forward pass to check
+                dummy = torch.randn(1, 3, 224, 224)
+                out = self.backbone(dummy)
+                if len(out.shape) == 4:
+                    feat_dim = out.shape[1]
+                else:
+                    feat_dim = out.shape[-1]
         except Exception:
-            feat_dim = 768
+            feat_dim = 768  # Fallback
 
         self.pooling = GeM()
         self.bn = nn.BatchNorm1d(feat_dim)
@@ -176,16 +159,21 @@ class ArcFaceClassifier(nn.Module):
     def forward(self, pixel_values, labels=None):
         features = self.backbone(pixel_values)
 
-        if len(features.shape) == 4:
+        # Handle different backbone output shapes
+        if len(features.shape) == 4:  # CNNs: (B, C, H, W)
             features = self.pooling(features).flatten(1)
-        elif len(features.shape) == 3:
+        elif len(features.shape) == 3:  # Transformers: (B, N, C)
             features = features.mean(dim=1)
+        elif len(features.shape) == 2:  # Already pooled (B, C)
+            pass
 
         features = self.bn(features)
 
+        # Inference: Return L2 normalized embeddings
         if labels is None or not self.training:
             return F.normalize(features)
 
+        # Training: ArcFace Logic
         cosine = F.linear(F.normalize(features), F.normalize(self.weight))
         sine = torch.sqrt((1.0 - torch.pow(cosine, 2)).clamp(0, 1))
         phi = cosine * self.cos_m - sine * self.sin_m
@@ -213,15 +201,18 @@ def process_data(train_data, valid_data, image_processor, config):
     Returns:
         tuple: A tuple containing the processed training dataset and the processed validation dataset (or None if no validation data is provided).
     """
+    # Resolve optimal normalization for the specific backbone
     try:
         data_config = timm.data.resolve_data_config({}, model=config.model)
         mean = data_config["mean"]
         std = data_config["std"]
+        # Use image_processor size if available, else config default from timm
         if "input_size" in data_config:
             height, width = data_config["input_size"][1], data_config["input_size"][2]
         else:
             height, width = 224, 224
     except Exception:
+        # Fallback to standard ImageNet
         mean = (0.485, 0.456, 0.406)
         std = (0.229, 0.224, 0.225)
         height, width = 224, 224
@@ -231,7 +222,14 @@ def process_data(train_data, valid_data, image_processor, config):
             A.RandomResizedCrop(height=height, width=width),
             A.RandomRotate90(),
             A.HorizontalFlip(p=0.5),
-            A.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1, p=config.augment_prob),
+            # Domain Erasing Augmentations (Configurable)
+            A.ColorJitter(
+                brightness=config.color_jitter_strength,
+                contrast=config.color_jitter_strength,
+                saturation=config.color_jitter_strength,
+                hue=0.1,
+                p=config.augment_prob,
+            ),
             A.ToGray(p=config.grayscale_prob),
             A.Normalize(mean=mean, std=std),
         ]

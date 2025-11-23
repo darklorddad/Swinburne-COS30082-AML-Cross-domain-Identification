@@ -6,7 +6,6 @@ from accelerate.state import PartialState
 from datasets import load_dataset, load_from_disk
 from huggingface_hub import HfApi
 from transformers import (
-    AutoConfig,
     AutoImageProcessor,
     EarlyStoppingCallback,
     Trainer,
@@ -102,6 +101,8 @@ def train(config):
                 f"Number of classes in train and valid are not the same. Training has {num_classes} and valid has {num_classes_valid}"
             )
 
+    # --- Initialize Custom ArcFace Model ---
+    logger.info(f"Initializing custom ArcFace model with backbone: {config.model}")
     model = ArcFaceClassifier(
         model_name=config.model,
         num_classes=num_classes,
@@ -109,6 +110,7 @@ def train(config):
         m=config.arcface_m,
     )
 
+    # Image Processor (mostly for consistency/saving, logic is in utils)
     try:
         image_processor = AutoImageProcessor.from_pretrained(config.model, token=config.token)
     except Exception:
@@ -135,7 +137,7 @@ def train(config):
     if scheduler == "cosine_warmup":
         scheduler = "cosine"
 
-    training_args = dict(
+    training_args_dict = dict(
         output_dir=config.project_name,
         per_device_train_batch_size=config.batch_size,
         per_device_eval_batch_size=2 * config.batch_size,
@@ -160,13 +162,13 @@ def train(config):
     )
 
     if config.valid_split is not None:
-        training_args["eval_steps"] = logging_steps
-        training_args["save_steps"] = logging_steps
+        training_args_dict["eval_steps"] = logging_steps
+        training_args_dict["save_steps"] = logging_steps
 
     if config.mixed_precision == "fp16":
-        training_args["fp16"] = True
+        training_args_dict["fp16"] = True
     if config.mixed_precision == "bf16":
-        training_args["bf16"] = True
+        training_args_dict["bf16"] = True
 
     if config.valid_split is not None:
         early_stop = EarlyStoppingCallback(
@@ -181,39 +183,29 @@ def train(config):
     if config.push_to_hub and config.username != "local":
         callbacks_to_use.insert(0, UploadLogs(config=config))
 
-    args = TrainingArguments(**training_args)
-    trainer_args = dict(
-        args=args,
-        model=model,
-        callbacks=callbacks_to_use,
-        compute_metrics=(
-            utils._binary_classification_metrics if num_classes == 2 else utils._multi_class_classification_metrics
-        ),
-    )
-
+    # --- STEP 1: WARMUP (Linear Probe) ---
     logger.info("--- STEP A: WARMUP (Freezing Backbone) ---")
     for param in model.backbone.parameters():
         param.requires_grad = False
 
-    warmup_args = training_args.copy()
-    warmup_args["num_train_epochs"] = config.warmup_epochs
-    warmup_args["learning_rate"] = config.head_lr
-
-    args_warmup = TrainingArguments(**warmup_args)
+    warmup_args_dict = training_args_dict.copy()
+    warmup_args_dict["num_train_epochs"] = config.warmup_epochs
+    warmup_args_dict["learning_rate"] = config.head_lr
 
     trainer_warmup = Trainer(
-        args=args_warmup,
+        args=TrainingArguments(**warmup_args_dict),
         model=model,
         train_dataset=train_data,
         eval_dataset=valid_data,
     )
-    trainer_warmup.remove_callback(PrinterCallback)
     trainer_warmup.train()
 
+    # --- STEP 2: FINE-TUNING (Unfreeze) ---
     logger.info("--- STEP B: FINE-TUNING (Unfreezing Backbone) ---")
     for param in model.backbone.parameters():
         param.requires_grad = True
 
+    # Differential Learning Rates
     backbone_params = list(map(id, model.backbone.parameters()))
     head_params = filter(lambda p: id(p) not in backbone_params, model.parameters())
 
@@ -225,8 +217,15 @@ def train(config):
         weight_decay=config.weight_decay,
     )
 
+    args = TrainingArguments(**training_args_dict)
+
     trainer = Trainer(
-        **trainer_args,
+        args=args,
+        model=model,
+        callbacks=callbacks_to_use,
+        compute_metrics=(
+            utils._binary_classification_metrics if num_classes == 2 else utils._multi_class_classification_metrics
+        ),
         train_dataset=train_data,
         eval_dataset=valid_data,
         optimizers=(optimizer, None),
