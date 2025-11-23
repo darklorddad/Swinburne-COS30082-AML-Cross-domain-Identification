@@ -98,26 +98,30 @@ def util_save_training_metrics(json_path, save_dir):
     
     saved_count = 1 # CSV
     
-    # Mapping for specific full names to ensure "Evaluation" prefix where appropriate
+    # Mapping keys to Chart Titles used in util_plot_training_metrics
     name_map = {
-        'Accuracy': 'Evaluation accuracy',
-        'F1 Scores': 'Evaluation F1 scores',
-        'Precision': 'Evaluation precision',
-        'Recall': 'Evaluation recall',
+        'Loss': 'Training vs. Evaluation Loss',
+        'Accuracy': 'Evaluation Accuracy',
+        'Learning Rate': 'Learning Rate Schedule',
+        'Gradient Norm': 'Gradient Norm',
+        'F1 Scores': 'Evaluation F1 Scores',
+        'Precision': 'Evaluation Precision Scores',
+        'Recall': 'Evaluation Recall Scores',
+        'Epoch': 'Epoch Progression',
+        'Eval Runtime': 'Evaluation Runtime',
+        'Eval Samples/sec': 'Evaluation Samples Per Second',
+        'Eval Steps/sec': 'Evaluation Steps Per Second'
     }
 
     for name, fig in figures.items():
         if fig:
-            # Apply specific mapping if exists
+            # Use the chart title if available, otherwise fallback to key
             full_name = name_map.get(name, name)
             
-            # Expand "Eval" to "Evaluation"
-            if full_name.startswith("Eval "):
-                full_name = full_name.replace("Eval ", "Evaluation ", 1)
-
             # Name format: Sentence case with dash, no space.
-            # e.g. "Evaluation Steps/sec" -> "Evaluation-steps-sec.png"
-            clean_name = full_name.replace('/', '-').replace(' ', '-')
+            # e.g. "Evaluation Steps Per Second" -> "Evaluation-steps-per-second.png"
+            # Remove dots if any (e.g. vs.) to keep it clean
+            clean_name = full_name.replace('.', '').replace('/', '-').replace(' ', '-')
             parts = clean_name.split('-')
             # Capitalize first part, lowercase rest
             formatted_parts = [parts[0].capitalize()] + [p.lower() for p in parts[1:]]
