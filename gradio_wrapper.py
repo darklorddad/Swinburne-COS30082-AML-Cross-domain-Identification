@@ -326,9 +326,6 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     batch_size = 32
     progress = gr.Progress()
     
-    last_update_time = 0
-    update_interval = 1.0  # Update plots at most once per second
-
     # Batch processing loop
     for i in progress.tqdm(range(0, len(image_paths), batch_size), desc="Evaluating"):
         batch_paths = image_paths[i : i + batch_size]
@@ -414,19 +411,6 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
             true_labels.append(gt_label)
             total_processed += 1
         
-        # Yield intermediate metrics
-        current_time = time.time()
-        if total_processed > 0 and (current_time - last_update_time > update_interval):
-            curr_mrr = np.mean(ranks)
-            curr_top1 = top1_correct / total_processed
-            curr_top5 = top5_correct / total_processed
-            
-            # Create intermediate plot
-            inter_fig = plot_metrics(curr_mrr, curr_top1, curr_top5)
-            yield None, inter_fig, None
-            plt.close(inter_fig)
-            last_update_time = current_time
-
     if total_processed == 0:
         raise gr.Error("No valid labeled images found.")
 
@@ -451,7 +435,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
         "true_labels": true_labels
     }
 
-    yield tsne_fig, metrics_fig, results_dict
+    return tsne_fig, metrics_fig, results_dict
 
 
 def save_evaluation_results(results_dict, output_dir):
