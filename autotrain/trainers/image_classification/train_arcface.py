@@ -55,7 +55,6 @@ class ArcFaceModel(nn.Module):
         self.backbone = AutoModel.from_pretrained(
             config._name_or_path,
             config=config,
-            add_pooling_layer=True,
             trust_remote_code=ALLOW_REMOTE_CODE,
         )
         self.embedding_dim = config.hidden_size
