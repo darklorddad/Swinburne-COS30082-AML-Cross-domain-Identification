@@ -150,6 +150,7 @@ DEFAULT_COLUMN_MAPPING["seq2seq"] = {"text_column": "text", "target_column": "ta
 DEFAULT_COLUMN_MAPPING["text-regression"] = {"text_column": "text", "target_column": "target"}
 DEFAULT_COLUMN_MAPPING["token-classification"] = {"text_column": "tokens", "target_column": "tags"}
 DEFAULT_COLUMN_MAPPING["image-classification"] = {"image_column": "image", "target_column": "label"}
+DEFAULT_COLUMN_MAPPING["image-classification-custom"] = {"image_column": "image", "target_column": "label"}
 DEFAULT_COLUMN_MAPPING["image-regression"] = {"image_column": "image", "target_column": "target"}
 DEFAULT_COLUMN_MAPPING["image-object-detection"] = {"image_column": "image", "objects_column": "objects"}
 DEFAULT_COLUMN_MAPPING["tabular:classification"] = {"id_column": "id", "target__columns": ["target"]}

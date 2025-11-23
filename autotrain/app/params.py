@@ -95,6 +95,10 @@ PARAMS["image-classification"] = ImageClassificationParams(
     mixed_precision="fp16",
     log="tensorboard",
 ).model_dump()
+PARAMS["image-classification-custom"] = ImageClassificationParams(
+    mixed_precision="fp16",
+    log="tensorboard",
+).model_dump()
 PARAMS["image-object-detection"] = ObjectDetectionParams(
     mixed_precision="fp16",
     log="tensorboard",
@@ -197,6 +201,8 @@ class AppParams:
         elif self.task == "seq2seq":
             return self._munge_params_seq2seq()
         elif self.task == "image-classification":
+            return self._munge_params_img_clf()
+        elif self.task == "image-classification-custom":
             return self._munge_params_img_clf()
         elif self.task == "image-object-detection":
             return self._munge_params_img_obj_det()
@@ -661,6 +667,20 @@ def get_task_params(task, param_type):
         ]
         task_params = {k: v for k, v in task_params.items() if k not in more_hidden_params}
     if task == "image-classification" and param_type == "basic":
+        more_hidden_params = [
+            "warmup_ratio",
+            "weight_decay",
+            "max_grad_norm",
+            "seed",
+            "logging_steps",
+            "auto_find_batch_size",
+            "save_total_limit",
+            "eval_strategy",
+            "early_stopping_patience",
+            "early_stopping_threshold",
+        ]
+        task_params = {k: v for k, v in task_params.items() if k not in more_hidden_params}
+    if task == "image-classification-custom" and param_type == "basic":
         more_hidden_params = [
             "warmup_ratio",
             "weight_decay",

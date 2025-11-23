@@ -506,6 +506,7 @@ class AutoTrainProject:
     ]
     backend: str
     process: bool = False
+    task_id: int = None
 
     def __post_init__(self):
         self.local = self.backend.startswith("local")
@@ -545,19 +546,19 @@ class AutoTrainProject:
             self.params = self._process_params_data()
 
         if self.backend.startswith("local"):
-            runner = LocalRunner(params=self.params, backend=self.backend)
+            runner = LocalRunner(params=self.params, backend=self.backend, task_id=self.task_id)
             return runner.create()
         elif self.backend.startswith("spaces-"):
-            runner = SpaceRunner(params=self.params, backend=self.backend)
+            runner = SpaceRunner(params=self.params, backend=self.backend, task_id=self.task_id)
             return runner.create()
         elif self.backend.startswith("ep-"):
-            runner = EndpointsRunner(params=self.params, backend=self.backend)
+            runner = EndpointsRunner(params=self.params, backend=self.backend, task_id=self.task_id)
             return runner.create()
         elif self.backend.startswith("ngc-"):
-            runner = NGCRunner(params=self.params, backend=self.backend)
+            runner = NGCRunner(params=self.params, backend=self.backend, task_id=self.task_id)
             return runner.create()
         elif self.backend.startswith("nvcf-"):
-            runner = NVCFRunner(params=self.params, backend=self.backend)
+            runner = NVCFRunner(params=self.params, backend=self.backend, task_id=self.task_id)
             return runner.create()
         else:
             raise NotImplementedError

@@ -473,6 +473,8 @@ async def fetch_model_choices(
         hub_models = MODEL_CHOICE["sentence-transformers"]
     elif task == "image-classification":
         hub_models = MODEL_CHOICE["image-classification"]
+    elif task == "image-classification-custom":
+        hub_models = MODEL_CHOICE["image-classification"]
     elif task == "seq2seq":
         hub_models = MODEL_CHOICE["seq2seq"]
     elif task == "tabular:classification":
@@ -598,6 +600,16 @@ async def handle_form(
                 percent_valid=None,  # TODO: add to UI
                 local=hardware.lower() == "local-ui",
             )
+        elif task == "image-classification-custom":
+            dset = AutoTrainImageClassificationDataset(
+                train_data=training_files[0],
+                token=token,
+                project_name=project_name,
+                username=autotrain_user,
+                valid_data=validation_files[0] if validation_files else None,
+                percent_valid=None,  # TODO: add to UI
+                local=hardware.lower() == "local-ui",
+            )
         elif task == "image-regression":
             dset = AutoTrainImageRegressionDataset(
                 train_data=training_files[0],
@@ -700,7 +712,10 @@ async def handle_form(
         valid_split=None if len(hub_dataset) == 0 else valid_split,
     )
     params = app_params.munge()
-    project = AutoTrainProject(params=params, backend=hardware)
+    task_id = None
+    if task == "image-classification-custom":
+        task_id = 118
+    project = AutoTrainProject(params=params, backend=hardware, task_id=task_id)
     job_id = project.create()
     monitor_url = ""
     if hardware == "local-ui":

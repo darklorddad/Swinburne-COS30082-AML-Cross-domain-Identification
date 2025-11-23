@@ -95,6 +95,7 @@ class BaseBackend:
         ExtractiveQuestionAnsweringParams,
     ]
     backend: str
+    task_id: int = None
 
     def __post_init__(self):
         self.username = None
@@ -113,34 +114,35 @@ class BaseBackend:
             else:
                 raise ValueError("Must provide username")
 
-        if isinstance(self.params, LLMTrainingParams):
-            self.task_id = 9
-        elif isinstance(self.params, TextClassificationParams):
-            self.task_id = 2
-        elif isinstance(self.params, TabularParams):
-            self.task_id = 26
-        elif isinstance(self.params, GenericParams):
-            self.task_id = 27
-        elif isinstance(self.params, Seq2SeqParams):
-            self.task_id = 28
-        elif isinstance(self.params, ImageClassificationParams):
-            self.task_id = 18
-        elif isinstance(self.params, TokenClassificationParams):
-            self.task_id = 4
-        elif isinstance(self.params, TextRegressionParams):
-            self.task_id = 10
-        elif isinstance(self.params, ObjectDetectionParams):
-            self.task_id = 29
-        elif isinstance(self.params, SentenceTransformersParams):
-            self.task_id = 30
-        elif isinstance(self.params, ImageRegressionParams):
-            self.task_id = 24
-        elif isinstance(self.params, VLMTrainingParams):
-            self.task_id = 31
-        elif isinstance(self.params, ExtractiveQuestionAnsweringParams):
-            self.task_id = 5
-        else:
-            raise NotImplementedError
+        if self.task_id is None:
+            if isinstance(self.params, LLMTrainingParams):
+                self.task_id = 9
+            elif isinstance(self.params, TextClassificationParams):
+                self.task_id = 2
+            elif isinstance(self.params, TabularParams):
+                self.task_id = 26
+            elif isinstance(self.params, GenericParams):
+                self.task_id = 27
+            elif isinstance(self.params, Seq2SeqParams):
+                self.task_id = 28
+            elif isinstance(self.params, ImageClassificationParams):
+                self.task_id = 18
+            elif isinstance(self.params, TokenClassificationParams):
+                self.task_id = 4
+            elif isinstance(self.params, TextRegressionParams):
+                self.task_id = 10
+            elif isinstance(self.params, ObjectDetectionParams):
+                self.task_id = 29
+            elif isinstance(self.params, SentenceTransformersParams):
+                self.task_id = 30
+            elif isinstance(self.params, ImageRegressionParams):
+                self.task_id = 24
+            elif isinstance(self.params, VLMTrainingParams):
+                self.task_id = 31
+            elif isinstance(self.params, ExtractiveQuestionAnsweringParams):
+                self.task_id = 5
+            else:
+                raise NotImplementedError
 
         self.available_hardware = AVAILABLE_HARDWARE
 

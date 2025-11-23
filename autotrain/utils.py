@@ -53,6 +53,8 @@ def run_training(params, task_id, local=False, wait=False):
         params = GenericParams(**params)
     elif task_id == 18:
         params = ImageClassificationParams(**params)
+    elif task_id == 118:
+        params = ImageClassificationParams(**params)
     elif task_id == 4:
         params = TokenClassificationParams(**params)
     elif task_id == 10:
@@ -71,7 +73,7 @@ def run_training(params, task_id, local=False, wait=False):
         raise NotImplementedError
 
     params.save(output_dir=params.project_name)
-    cmd = launch_command(params=params)
+    cmd = launch_command(params=params, task_id=task_id)
     cmd = [str(c) for c in cmd]
     if cmd and cmd[0] == "accelerate" and cmd[1] == "launch":
         cmd = [sys.executable, "-m", "accelerate.commands.launch"] + cmd[2:]

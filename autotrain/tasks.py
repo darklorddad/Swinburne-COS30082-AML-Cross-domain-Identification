@@ -18,6 +18,7 @@ VISION_TASKS = {
     "image_multi_class_classification": 18,
     "image_single_column_regression": 24,
     "image_object_detection": 29,
+    "image_classification_custom": 118,
 }
 
 TABULAR_TASKS = {

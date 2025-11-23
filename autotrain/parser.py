@@ -76,6 +76,7 @@ class AutoTrainConfigParser:
             "lm_training": LLMTrainingParams,
             "image_binary_classification": ImageClassificationParams,
             "image_multi_class_classification": ImageClassificationParams,
+            "image_classification_custom": ImageClassificationParams,
             "image_object_detection": ObjectDetectionParams,
             "seq2seq": Seq2SeqParams,
             "tabular": TabularParams,
@@ -93,6 +94,7 @@ class AutoTrainConfigParser:
             "tabular": tabular_munge_data,
             "seq2seq": seq2seq_munge_data,
             "image_multi_class_classification": img_clf_munge_data,
+            "image_classification_custom": img_clf_munge_data,
             "image_object_detection": img_obj_detect_munge_data,
             "text_multi_class_classification": text_clf_munge_data,
             "text_token_classification": token_clf_munge_data,
@@ -113,6 +115,7 @@ class AutoTrainConfigParser:
             "image-binary-classification": "image_multi_class_classification",
             "image_classification": "image_multi_class_classification",
             "image-classification": "image_multi_class_classification",
+            "image-classification-custom": "image_classification_custom",
             "seq2seq": "seq2seq",
             "tabular": "tabular",
             "text_binary_classification": "text_multi_class_classification",
@@ -224,6 +227,9 @@ class AutoTrainConfigParser:
         logger.info(_params)
         _munge_fn = self.munge_data_map[self.task]
         _munge_fn(_params, local=self.backend.startswith("local"))
-        project = AutoTrainProject(params=_params, backend=self.backend)
+        task_id = None
+        if self.task == "image_classification_custom":
+            task_id = 118
+        project = AutoTrainProject(params=_params, backend=self.backend, task_id=task_id)
         job_id = project.create()
         logger.info(f"Job ID: {job_id}")

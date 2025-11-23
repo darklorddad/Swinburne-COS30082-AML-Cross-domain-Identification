@@ -95,7 +95,7 @@ def get_accelerate_command(num_gpus, gradient_accumulation_steps=1, distributed_
         raise ValueError("Unsupported distributed backend")
 
 
-def launch_command(params):
+def launch_command(params, task_id=None):
     """
     Launches the appropriate training command based on the type of training parameters provided.
 
@@ -347,10 +347,13 @@ def launch_command(params):
                 ]
             )
         else:
+            trainer_module = "autotrain.trainers.image_classification"
+            if task_id == 118:
+                trainer_module = "autotrain.trainers.image_classification_custom"
             cmd.extend(
                 [
                     "-m",
-                    "autotrain.trainers.image_classification",
+                    trainer_module,
                     "--training_config",
                     os.path.join(params.project_name, "training_params.json"),
                 ]
