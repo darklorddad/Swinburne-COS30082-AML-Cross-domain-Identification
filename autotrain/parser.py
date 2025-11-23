@@ -24,6 +24,7 @@ from autotrain.tasks import TASKS
 from autotrain.trainers.clm.params import LLMTrainingParams
 from autotrain.trainers.extractive_question_answering.params import ExtractiveQuestionAnsweringParams
 from autotrain.trainers.image_classification.params import ImageClassificationParams
+from autotrain.trainers.image_classification_custom.params import ImageClassificationParams as ImageClassificationCustomParams
 from autotrain.trainers.image_regression.params import ImageRegressionParams
 from autotrain.trainers.object_detection.params import ObjectDetectionParams
 from autotrain.trainers.sent_transformers.params import SentenceTransformersParams
@@ -76,7 +77,7 @@ class AutoTrainConfigParser:
             "lm_training": LLMTrainingParams,
             "image_binary_classification": ImageClassificationParams,
             "image_multi_class_classification": ImageClassificationParams,
-            "image_classification_custom": ImageClassificationParams,
+            "image_classification_custom": ImageClassificationCustomParams,
             "image_object_detection": ObjectDetectionParams,
             "seq2seq": Seq2SeqParams,
             "tabular": TabularParams,

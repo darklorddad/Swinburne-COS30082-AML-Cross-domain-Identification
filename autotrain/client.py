@@ -59,6 +59,14 @@ PARAMS["image-classification"] = {
     "log": "tensorboard",
 }
 
+PARAMS["image-classification-custom"] = {
+    "mixed_precision": "fp16",
+    "log": "tensorboard",
+    "arcface_s": 30.0,
+    "arcface_m": 0.5,
+    "warmup_epochs": 5,
+}
+
 PARAMS["image-object-detection"] = {
     "mixed_precision": "fp16",
     "log": "tensorboard",

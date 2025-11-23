@@ -5,6 +5,7 @@ from typing import Optional
 from autotrain.trainers.clm.params import LLMTrainingParams
 from autotrain.trainers.extractive_question_answering.params import ExtractiveQuestionAnsweringParams
 from autotrain.trainers.image_classification.params import ImageClassificationParams
+from autotrain.trainers.image_classification_custom.params import ImageClassificationParams as ImageClassificationCustomParams
 from autotrain.trainers.image_regression.params import ImageRegressionParams
 from autotrain.trainers.object_detection.params import ObjectDetectionParams
 from autotrain.trainers.sent_transformers.params import SentenceTransformersParams
@@ -95,9 +96,16 @@ PARAMS["image-classification"] = ImageClassificationParams(
     mixed_precision="fp16",
     log="tensorboard",
 ).model_dump()
-PARAMS["image-classification-custom"] = ImageClassificationParams(
+PARAMS["image-classification-custom"] = ImageClassificationCustomParams(
     mixed_precision="fp16",
     log="tensorboard",
+    arcface_s=30.0,
+    arcface_m=0.5,
+    warmup_epochs=5,
+    augment_prob=0.5,
+    grayscale_prob=0.2,
+    backbone_lr=1e-5,
+    head_lr=1e-3,
 ).model_dump()
 PARAMS["image-object-detection"] = ObjectDetectionParams(
     mixed_precision="fp16",

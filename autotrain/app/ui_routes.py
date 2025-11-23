@@ -288,6 +288,38 @@ UI_PARAMS = {
         "label": "Distributed backend",
         "options": ["ddp", "deepspeed"],
     },
+    "arcface_s": {
+        "type": "number",
+        "label": "ArcFace Scale (s)",
+    },
+    "arcface_m": {
+        "type": "number",
+        "label": "ArcFace Margin (m)",
+    },
+    "warmup_epochs": {
+        "type": "number",
+        "label": "Warmup Epochs",
+    },
+    "augment_prob": {
+        "type": "number",
+        "label": "Augment Prob (Jitter)",
+    },
+    "grayscale_prob": {
+        "type": "number",
+        "label": "Grayscale Prob",
+    },
+    "color_jitter_strength": {
+        "type": "number",
+        "label": "Jitter Strength",
+    },
+    "backbone_lr": {
+        "type": "number",
+        "label": "Backbone LR",
+    },
+    "head_lr": {
+        "type": "number",
+        "label": "Head LR",
+    },
 }
 
 
