@@ -172,6 +172,7 @@ def train(config):
         fp16=config.mixed_precision == "fp16",
         bf16=config.mixed_precision == "bf16",
         load_best_model_at_end=True if valid_data else False,
+        report_to=config.log,
     )
 
     args = TrainingArguments(**training_args)
