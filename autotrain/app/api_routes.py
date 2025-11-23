@@ -89,7 +89,7 @@ def create_api_base_model(base_class, class_name):
     return create_model(
         class_name,
         **{key: (value[0], value[1]) for key, value in new_fields.items()},
-        __config__={"protected_namespaces": ()},
+        __config__=type("Config", (), {"protected_namespaces": ()}),
     )
 
 

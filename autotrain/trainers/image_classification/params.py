@@ -68,8 +68,3 @@ class ImageClassificationParams(AutoTrainParams):
     log: str = Field("none", title="Logging method for experiment tracking")
     early_stopping_patience: int = Field(5, title="Number of epochs with no improvement for early stopping")
     early_stopping_threshold: float = Field(0.01, title="Threshold for early stopping")
-
-    trainer: str = Field("default", title="Trainer type")
-    arcface_s: float = Field(30.0, title="ArcFace Scale")
-    arcface_m: float = Field(0.5, title="ArcFace Margin")
-    sub_centers: int = Field(1, title="Number of Sub-centers (1 = Standard ArcFace)")
