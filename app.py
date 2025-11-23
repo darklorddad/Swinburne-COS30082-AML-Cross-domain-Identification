@@ -163,7 +163,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
     with gr.Tab("Dataset preparation"):
         
-        with gr.Accordion("Clean dataset names (Snake Case)", open=False):
+        with gr.Accordion("Clean dataset names (snake case)", open=False):
             with gr.Column():
                 cn_source_dir = gr.Textbox(label="Source directory")
                 cn_destination_dir = gr.Textbox(label="Destination directory")
