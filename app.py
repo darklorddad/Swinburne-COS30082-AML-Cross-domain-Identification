@@ -100,35 +100,36 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
     with gr.Tab("Evaluation"):
         # 1. Model Selection
         with gr.Row():
-            eval_source = gr.Radio(
-                choices=["Local", "Hugging Face Hub", "Local .pth"],
-                value="Local",
-                label="Model source"
-            )
-        
-        with gr.Column():
-            eval_model_path = gr.Dropdown(
-                label="Select local model", 
-                choices=[], 
-                value=None, 
-                filterable=False,
-                visible=True
-            )
-            eval_hf_id = gr.Textbox(
-                label="Hugging Face model ID", 
-                placeholder="e.g. microsoft/resnet-50", 
-                visible=False
-            )
-            with gr.Column(visible=False) as eval_pth_group:
-                eval_pth_file = gr.File(label="Upload .pth file", file_types=[".pth"])
-                eval_pth_classes = gr.File(label="Upload class list (txt/json)", file_types=[".txt", ".json"])
-                eval_pth_arch = gr.Textbox(
-                    label="Architecture name (timm)", 
-                    placeholder="e.g. resnet50, vit_base_patch16_224"
-                )
+            with gr.Column():
+                with gr.Group():
+                    eval_source = gr.Radio(
+                        choices=["Local", "Hugging Face Hub", "Local .pth"],
+                        value="Local",
+                        label="Model source"
+                    )
+                
+                    eval_model_path = gr.Dropdown(
+                        label="Select local model", 
+                        choices=[], 
+                        value=None, 
+                        filterable=False,
+                        visible=True
+                    )
+                    eval_hf_id = gr.Textbox(
+                        label="Hugging Face model ID", 
+                        placeholder="e.g. microsoft/resnet-50", 
+                        visible=False
+                    )
+                    with gr.Column(visible=False) as eval_pth_group:
+                        eval_pth_file = gr.File(label="Upload .pth file", file_types=[".pth"])
+                        eval_pth_classes = gr.File(label="Upload class list (txt/json)", file_types=[".txt", ".json"])
+                        eval_pth_arch = gr.Textbox(
+                            label="Architecture name (timm)", 
+                            placeholder="e.g. resnet50, vit_base_patch16_224"
+                        )
 
         # 2. Test Set & Run
-        with gr.Column(visible=True) as eval_run_container:
+        with gr.Column(visible=False) as eval_run_container:
             eval_test_dir = gr.Textbox(label="Test Directory (with renamed images)", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Test"))
             eval_button = gr.Button("Run Evaluation", variant="primary")
 
@@ -148,18 +149,35 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 eval_plot_am = gr.Plot(label="Activation Maps (Sample)")
 
         # Logic
-        def update_eval_inputs(source):
+        def update_eval_inputs(source, local_path, hf_id, pth_file):
+            is_local = (source == "Local")
+            is_hf = (source == "Hugging Face Hub")
+            is_pth = (source == "Local .pth")
+            
+            show_run = False
+            if is_local and local_path: show_run = True
+            if is_hf and hf_id: show_run = True
+            if is_pth and pth_file: show_run = True
+
             return (
-                gr.update(visible=(source == "Local")),
-                gr.update(visible=(source == "Hugging Face Hub")),
-                gr.update(visible=(source == "Local .pth"))
+                gr.update(visible=is_local),
+                gr.update(visible=is_hf),
+                gr.update(visible=is_pth),
+                gr.update(visible=show_run)
             )
 
         eval_source.change(
             fn=update_eval_inputs,
-            inputs=[eval_source],
-            outputs=[eval_model_path, eval_hf_id, eval_pth_group]
+            inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file],
+            outputs=[eval_model_path, eval_hf_id, eval_pth_group, eval_run_container]
         )
+
+        def check_model_selected(value):
+            return gr.update(visible=bool(value))
+
+        eval_model_path.change(fn=check_model_selected, inputs=[eval_model_path], outputs=[eval_run_container])
+        eval_hf_id.change(fn=check_model_selected, inputs=[eval_hf_id], outputs=[eval_run_container])
+        eval_pth_file.change(fn=check_model_selected, inputs=[eval_pth_file], outputs=[eval_run_container])
 
         eval_button.click(
             fn=evaluate_test_set,
