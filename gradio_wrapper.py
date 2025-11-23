@@ -277,16 +277,17 @@ def show_model_charts(model_dir):
         return (None,) * 11 + (gr.update(visible=False), model_dir)
 
 
-def save_metrics(model_dir, save_dir):
+def save_metrics(model_dir):
     if not model_dir:
         raise gr.Error("Please select a model.")
-    if not save_dir:
-        raise gr.Error("Please provide a save directory.")
-
+    
     # The model_dir might be a checkpoint. trainer_state.json is usually in the parent.
     search_dir = model_dir
     if os.path.basename(search_dir).startswith('checkpoint-'):
         search_dir = os.path.dirname(search_dir)
+
+    # Define save directory inside the model root
+    save_dir = os.path.join(search_dir, "Training-metrics")
 
     json_path = None
     for root, _, files in os.walk(search_dir):

@@ -90,7 +90,7 @@ def util_save_training_metrics(json_path, save_dir):
     df = pd.DataFrame(data.get('log_history', []))
     if df.empty: raise ValueError("No 'log_history' found.")
     
-    csv_path = os.path.join(save_dir, 'metrics.csv')
+    csv_path = os.path.join(save_dir, 'Training-metrics.csv')
     df.to_csv(csv_path, index=False)
     
     # 2. Generate and Save Plots
@@ -99,7 +99,14 @@ def util_save_training_metrics(json_path, save_dir):
     saved_count = 1 # CSV
     for name, fig in figures.items():
         if fig:
-            filename = name.lower().replace(' ', '_').replace('/', '_') + '.png'
+            # Name format: Sentence case with dash, no space.
+            # e.g. "Eval Steps/sec" -> "Eval-steps-sec.png"
+            clean_name = name.replace('/', '-').replace(' ', '-')
+            parts = clean_name.split('-')
+            # Capitalize first part, lowercase rest
+            formatted_parts = [parts[0].capitalize()] + [p.lower() for p in parts[1:]]
+            filename = "-".join(formatted_parts) + ".png"
+            
             path = os.path.join(save_dir, filename)
             fig.savefig(path)
             saved_count += 1

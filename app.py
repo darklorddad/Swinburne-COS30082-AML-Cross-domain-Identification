@@ -93,13 +93,12 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         with gr.Column(visible=False) as inf_plots_container:
             with gr.Accordion("Save metrics", open=False):
                 with gr.Column():
-                    metrics_save_dir = gr.Textbox(label="Save directory", placeholder="e.g. ./metrics_output")
                     metrics_save_btn = gr.Button("Save metrics", variant="primary")
                     metrics_status = gr.Textbox(label="Status", interactive=False, lines=2)
 
                 metrics_save_btn.click(
                     fn=save_metrics,
-                    inputs=[metrics_model_path, metrics_save_dir],
+                    inputs=[metrics_model_path],
                     outputs=[metrics_status]
                 )
 
