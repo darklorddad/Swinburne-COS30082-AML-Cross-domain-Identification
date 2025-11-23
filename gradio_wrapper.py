@@ -15,8 +15,6 @@ import random
 import zipfile
 import math
 import matplotlib.pyplot as plt
-import queue
-import threading
 import re
 import json
 import tempfile
@@ -398,11 +396,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
                             if features.dim() == 4: # [B, C, H, W]
                                 batch_emb_numpy = features.mean(dim=[2, 3]).cpu().numpy()
                             elif features.dim() == 3: # [B, Seq, Dim]
-                                # Try to find global pool if possible, else mean
-                                if hasattr(model, 'global_pool'):
-                                    batch_emb_numpy = features.mean(dim=1).cpu().numpy()
-                                else:
-                                    batch_emb_numpy = features.mean(dim=1).cpu().numpy()
+                                batch_emb_numpy = features.mean(dim=1).cpu().numpy()
                             else:
                                 batch_emb_numpy = features.cpu().numpy()
                             
