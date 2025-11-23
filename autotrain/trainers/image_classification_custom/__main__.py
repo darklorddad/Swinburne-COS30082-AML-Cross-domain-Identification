@@ -283,11 +283,27 @@ def train(config):
     logger.info("Finished training, saving model...")
     torch.save(model.state_dict(), f"{config.project_name}/pytorch_model.bin")
 
-    # Is this a problem? Not for inference, provided you know the parameters you used. To load the model later, you simply need to instantiate the class with the same arguments you used for training, and then load the weights:
-    #
-    # # You must manually provide the params used during training
-    # model = ArcFaceClassifier(model_name="microsoft/resnet-18", num_classes=100, ...)
-    # model.load_state_dict(torch.load("path/to/pytorch_model.bin"))
+    inference_notes = f"""
+# Inference Notes
+
+To load this model, you need to instantiate the `ArcFaceClassifier` class with the same arguments used during training, and then load the weights.
+
+```python
+from autotrain.trainers.image_classification_custom.utils import ArcFaceClassifier
+import torch
+
+model = ArcFaceClassifier(
+    model_name="{config.model}",
+    num_classes={num_classes},
+    s={config.arcface_s},
+    m={config.arcface_m}
+)
+model.load_state_dict(torch.load("pytorch_model.bin"))
+model.eval()
+```
+"""
+    with open(f"{config.project_name}/inference_notes.md", "w") as f:
+        f.write(inference_notes)
 
     # Save training arguments (Standard AutoTrain behavior)
     torch.save(args, f"{config.project_name}/training_args.bin")
