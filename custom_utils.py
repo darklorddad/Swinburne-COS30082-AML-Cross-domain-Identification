@@ -2,6 +2,166 @@ import os
 import shutil
 import re
 import gradio as gr
+import torch
+from transformers import AutoImageProcessor, AutoModelForImageClassification
+from PIL import Image
+import numpy as np
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+
+def get_latest_checkpoint(model_path):
+    if not os.path.exists(model_path):
+        return None
+        
+    if os.path.basename(model_path).startswith('checkpoint-'):
+        return model_path
+        
+    checkpoints = []
+    for item in os.listdir(model_path):
+        path = os.path.join(model_path, item)
+        if os.path.isdir(path) and item.startswith('checkpoint-'):
+            try:
+                step = int(item.split('-')[-1])
+                checkpoints.append((step, path))
+            except (ValueError, IndexError):
+                continue
+
+    if checkpoints:
+        return sorted(checkpoints, key=lambda x: x[0], reverse=True)[0][1]
+    
+    # If no checkpoints found, check if the dir itself has config.json
+    if os.path.exists(os.path.join(model_path, 'config.json')):
+        return model_path
+        
+    return None
+
+def evaluate_model(model_path, test_dir):
+    if not model_path:
+        raise gr.Error("Please select a model.")
+    if not test_dir or not os.path.exists(test_dir):
+        raise gr.Error("Please provide a valid test directory.")
+
+    checkpoint_path = get_latest_checkpoint(model_path)
+    if not checkpoint_path:
+        raise gr.Error(f"No valid model checkpoint found in {model_path}")
+
+    try:
+        processor = AutoImageProcessor.from_pretrained(checkpoint_path, local_files_only=True)
+        model = AutoModelForImageClassification.from_pretrained(checkpoint_path, local_files_only=True)
+    except Exception as e:
+        raise gr.Error(f"Failed to load model: {e}")
+
+    model.eval()
+    
+    # Prepare labels
+    id2label = model.config.id2label
+    label2id = {v: k for k, v in id2label.items()}
+    
+    # We need to match filenames to labels. 
+    # Filenames are like: {label}_{original_name}.jpg
+    # We sort labels by length to match longest prefix first.
+    sorted_labels = sorted(label2id.keys(), key=len, reverse=True)
+    
+    true_labels = []
+    embeddings = []
+    ranks = []
+    
+    image_files = [f for f in os.listdir(test_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    
+    if not image_files:
+        raise gr.Error("No images found in test directory.")
+
+    progress = gr.Progress()
+    
+    with torch.no_grad():
+        for i, filename in enumerate(progress.tqdm(image_files, desc="Processing images")):
+            # 1. Identify Ground Truth
+            gt_label = None
+            for label in sorted_labels:
+                if filename.startswith(label + "_"):
+                    gt_label = label
+                    break
+            
+            if not gt_label:
+                # Skip files where we can't identify the class
+                continue
+                
+            gt_id = label2id[gt_label]
+            
+            # 2. Load and Process Image
+            img_path = os.path.join(test_dir, filename)
+            try:
+                image = Image.open(img_path).convert("RGB")
+                inputs = processor(images=image, return_tensors="pt")
+            except Exception as e:
+                print(f"Error processing {filename}: {e}")
+                continue
+                
+            # 3. Inference
+            outputs = model(**inputs, output_hidden_states=True)
+            logits = outputs.logits[0]
+            
+            # Use the last hidden state for embeddings
+            if outputs.hidden_states:
+                # Global Average Pooling on the last hidden state
+                last_hidden = outputs.hidden_states[-1][0] 
+                if last_hidden.dim() == 2: # [seq_len, hidden]
+                    emb = last_hidden.mean(dim=0)
+                elif last_hidden.dim() == 3: # [channels, h, w]
+                    emb = last_hidden.mean(dim=[1, 2])
+                else:
+                    emb = last_hidden
+                embeddings.append(emb.numpy())
+            else:
+                embeddings.append(logits.numpy())
+
+            true_labels.append(gt_label)
+            
+            # 4. Calculate Rank for MRR
+            sorted_indices = torch.argsort(logits, descending=True)
+            rank = (sorted_indices == gt_id).nonzero(as_tuple=True)[0].item() + 1
+            ranks.append(1.0 / rank)
+
+    if not ranks:
+        return "No valid labeled images found for evaluation.", None
+
+    # MRR
+    mrr_score = np.mean(ranks)
+    result_text = f"Mean Reciprocal Rank (MRR): {mrr_score:.4f}\nProcessed {len(ranks)} images."
+
+    # t-SNE
+    if len(embeddings) < 2:
+        return result_text + "\nNot enough data for t-SNE.", None
+        
+    embeddings_np = np.array(embeddings)
+    n_samples = embeddings_np.shape[0]
+    perplexity = min(30, n_samples - 1)
+    
+    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42, init='pca', learning_rate='auto')
+    tsne_results = tsne.fit_transform(embeddings_np)
+    
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    unique_labels = list(set(true_labels))
+    # Simple colormap
+    cmap = plt.get_cmap('tab10' if len(unique_labels) <= 10 else 'viridis')
+    
+    for i, label in enumerate(unique_labels):
+        indices = [j for j, l in enumerate(true_labels) if l == label]
+        points = tsne_results[indices]
+        color = cmap(i / len(unique_labels))
+        ax.scatter(points[:, 0], points[:, 1], label=label, color=color, s=60, alpha=0.8)
+    
+    ax.set_title(f"t-SNE Visualization (MRR: {mrr_score:.4f})")
+    if len(unique_labels) <= 20:
+        ax.legend()
+    else:
+        result_text += "\n(Legend hidden due to high number of classes)"
+    
+    plt.tight_layout()
+    
+    return result_text, fig
 
 def custom_sort_dataset(source_dir, destination_dir, species_list_path, pairs_list_path):
     """Sorts dataset into class folders named by species, renaming images with metadata."""

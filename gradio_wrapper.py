@@ -949,4 +949,4 @@ def update_model_choices(current_model=None):
     if current_model and current_model in choice_values:
         new_value = current_model
     
-    return gr.update(choices=choices, value=new_value), gr.update(choices=choices, value=new_value)
+    return gr.update(choices=choices, value=new_value), gr.update(choices=choices, value=new_value), gr.update(choices=choices, value=new_value)
