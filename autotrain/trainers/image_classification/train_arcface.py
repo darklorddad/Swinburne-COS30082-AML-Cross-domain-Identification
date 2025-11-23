@@ -89,6 +89,9 @@ class ArcFaceModel(nn.Module):
             else:
                 embeds = outputs[0].mean(dim=1)
 
+        if len(embeds.shape) > 2:
+            embeds = embeds.flatten(start_dim=1)
+
         logits = self.head(embeds, labels)
         loss = None
         if labels is not None:
