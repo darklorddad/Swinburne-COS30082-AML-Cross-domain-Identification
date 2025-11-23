@@ -42,12 +42,12 @@ Approach_A_Feature_Extraction/features/
 *.7z
 
 # Documents
-Documents/
-*.pdf
-*.docx
-*.doc
-*.odt
-*.rtf
+# Documents/
+# *.pdf
+# *.docx
+# *.doc
+# *.odt
+# *.rtf
 
 # IDE
 .vscode/
