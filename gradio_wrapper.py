@@ -26,6 +26,17 @@ from utils import (
     util_save_training_metrics
 )
 
+def get_placeholder_plot():
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.text(0.5, 0.5, "Evaluation in progress...", ha='center', va='center', fontsize=12, color='gray')
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    plt.tight_layout()
+    return fig
+
+
 def plot_tsne(embeddings, true_labels, mrr_score):
     if len(embeddings) < 2:
         return None

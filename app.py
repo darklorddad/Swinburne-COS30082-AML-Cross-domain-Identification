@@ -4,7 +4,8 @@ from gradio_wrapper import (
     classify_plant, show_model_charts, get_model_choices, update_model_choices,
     launch_autotrain_ui, launch_tensorboard, generate_manifest,
     split_dataset, check_dataset_balance, check_dataset_splittability,
-    clean_dataset_names, save_metrics, evaluate_test_set, save_evaluation_results
+    clean_dataset_names, save_metrics, evaluate_test_set, save_evaluation_results,
+    get_placeholder_plot
 )
 try:
     from custom_utils import custom_sort_dataset, rename_test_images_func, sort_test_dataset
@@ -145,8 +146,8 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         
         with gr.Column(visible=False) as eval_results_container:
             with gr.Row():
-                eval_plot_tsne = gr.Plot(label="t-SNE Visualization")
-                eval_plot_metrics = gr.Plot(label="Metrics")
+                eval_plot_tsne = gr.Plot(label="t-SNE Visualization", value=get_placeholder_plot)
+                eval_plot_metrics = gr.Plot(label="Metrics", value=get_placeholder_plot)
 
         # Logic
         def update_eval_inputs(source):
