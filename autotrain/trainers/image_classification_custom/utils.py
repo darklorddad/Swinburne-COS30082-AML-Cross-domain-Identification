@@ -152,10 +152,13 @@ class ArcFaceClassifier(nn.Module):
         super().__init__()
         self.backbone = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
 
-        if hasattr(self.backbone, "num_features"):
-            feat_dim = self.backbone.num_features
-        else:
-            feat_dim = self.backbone(torch.randn(1, 3, 224, 224)).shape[1]
+        try:
+            if hasattr(self.backbone, "num_features"):
+                feat_dim = self.backbone.num_features
+            else:
+                feat_dim = self.backbone(torch.randn(1, 3, 224, 224)).shape[1]
+        except Exception:
+            feat_dim = 768
 
         self.pooling = GeM()
         self.bn = nn.BatchNorm1d(feat_dim)
@@ -210,40 +213,34 @@ def process_data(train_data, valid_data, image_processor, config):
     Returns:
         tuple: A tuple containing the processed training dataset and the processed validation dataset (or None if no validation data is provided).
     """
-    if type(image_processor).__name__ == "TimmWrapperImageProcessor":
-        data_config = timm.create_model(config.model, pretrained=True).default_cfg
-        input_size = data_config["input_size"]
-        size = (input_size[1], input_size[2])
-        image_processor.image_mean = data_config["mean"]
-        image_processor.image_std = data_config["std"]
-    elif hasattr(image_processor, "default_cfg"):
-        input_size = image_processor.default_cfg["input_size"]
-        size = (input_size[1], input_size[2])
-    elif "shortest_edge" in image_processor.size:
-        size = image_processor.size["shortest_edge"]
-    else:
-        size = (image_processor.size["height"], image_processor.size["width"])
     try:
-        height, width = size
-    except TypeError:
-        height = size
-        width = size
+        data_config = timm.data.resolve_data_config({}, model=config.model)
+        mean = data_config["mean"]
+        std = data_config["std"]
+        if "input_size" in data_config:
+            height, width = data_config["input_size"][1], data_config["input_size"][2]
+        else:
+            height, width = 224, 224
+    except Exception:
+        mean = (0.485, 0.456, 0.406)
+        std = (0.229, 0.224, 0.225)
+        height, width = 224, 224
 
     train_transforms = A.Compose(
         [
             A.RandomResizedCrop(height=height, width=width),
             A.RandomRotate90(),
             A.HorizontalFlip(p=0.5),
-            A.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1, p=0.8),
+            A.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1, p=config.augment_prob),
             A.ToGray(p=0.2),
-            A.Normalize(mean=image_processor.image_mean, std=image_processor.image_std),
+            A.Normalize(mean=mean, std=std),
         ]
     )
 
     val_transforms = A.Compose(
         [
             A.Resize(height=height, width=width),
-            A.Normalize(mean=image_processor.image_mean, std=image_processor.image_std),
+            A.Normalize(mean=mean, std=std),
         ]
     )
     train_data = ImageClassificationDataset(train_data, train_transforms, config)

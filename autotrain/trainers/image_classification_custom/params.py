@@ -72,3 +72,5 @@ class ImageClassificationParams(AutoTrainParams):
     early_stopping_threshold: float = Field(0.01, title="Threshold for early stopping")
     arcface_s: float = Field(30.0, title="ArcFace Scale")
     arcface_m: float = Field(0.5, title="ArcFace Margin")
+    warmup_epochs: int = Field(5, title="Warmup Epochs")
+    augment_prob: float = Field(0.5, title="Augmentation Probability (ColorJitter)")

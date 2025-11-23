@@ -112,9 +112,8 @@ def train(config):
     try:
         image_processor = AutoImageProcessor.from_pretrained(config.model, token=config.token)
     except Exception:
-        from transformers import ConvNextImageProcessor
+        image_processor = None
 
-        image_processor = ConvNextImageProcessor.from_pretrained("facebook/convnext-tiny-224")
     train_data, valid_data = utils.process_data(train_data, valid_data, image_processor, config)
 
     if config.logging_steps == -1:
@@ -197,7 +196,7 @@ def train(config):
         param.requires_grad = False
 
     warmup_args = training_args.copy()
-    warmup_args["num_train_epochs"] = 5
+    warmup_args["num_train_epochs"] = config.warmup_epochs
     warmup_args["learning_rate"] = 1e-3
 
     args_warmup = TrainingArguments(**warmup_args)
@@ -215,13 +214,13 @@ def train(config):
     for param in model.backbone.parameters():
         param.requires_grad = True
 
-    head_params = list(map(id, model.backbone.parameters()))
-    base_params = filter(lambda p: id(p) not in head_params, model.parameters())
+    backbone_params = list(map(id, model.backbone.parameters()))
+    head_params = filter(lambda p: id(p) not in backbone_params, model.parameters())
 
     optimizer = torch.optim.AdamW(
         [
             {"params": model.backbone.parameters(), "lr": 1e-5},
-            {"params": base_params, "lr": 1e-3},
+            {"params": head_params, "lr": 1e-3},
         ],
         weight_decay=config.weight_decay,
     )
@@ -237,7 +236,8 @@ def train(config):
 
     logger.info("Finished training, saving model...")
     torch.save(model.state_dict(), f"{config.project_name}/pytorch_model.bin")
-    image_processor.save_pretrained(config.project_name)
+    if image_processor:
+        image_processor.save_pretrained(config.project_name)
 
     model_card = utils.create_model_card(config, trainer, num_classes)
 
