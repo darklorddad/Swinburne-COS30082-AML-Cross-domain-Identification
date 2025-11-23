@@ -35,7 +35,7 @@ ENABLE_NGC = int(os.environ.get("ENABLE_NGC", 0))
 ENABLE_NVCF = int(os.environ.get("ENABLE_NVCF", 0))
 AUTOTRAIN_LOCAL = int(os.environ.get("AUTOTRAIN_LOCAL", 1))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB = AutoTrainDB("autotrain.db")
+DB = AutoTrainDB(os.path.join(BASE_DIR, "autotrain.db"))
 MODEL_CHOICE = fetch_models()
 
 ui_router = APIRouter()
