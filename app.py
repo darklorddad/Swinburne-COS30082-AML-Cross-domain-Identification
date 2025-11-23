@@ -129,7 +129,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
         # 2. Test Set & Run
         with gr.Column(visible=True) as eval_run_container:
-            with gr.Accordion("Settings", open=True):
+            with gr.Accordion("Settings", open=False):
                 eval_test_dir = gr.Textbox(label="Path to test set", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set"))
                 eval_button = gr.Button("Run evaluation", variant="primary")
 
@@ -137,7 +137,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         with gr.Column(visible=False) as eval_save_container:
             with gr.Accordion("Save evaluation", open=False):
                 with gr.Column():
-                    eval_export_dir = gr.Textbox(label="Export Directory")
+                    eval_export_dir = gr.Textbox(label="Export directory")
                     eval_export_btn = gr.Button("Save", variant="primary")
                     eval_export_status = gr.Textbox(label="Status", interactive=False)
 
@@ -146,7 +146,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         
         with gr.Column(visible=False) as eval_results_container:
             with gr.Row():
-                eval_plot_tsne = gr.Plot(label="t-SNE Visualization", value=get_placeholder_plot)
+                eval_plot_tsne = gr.Plot(label="t-SNE Visualisation", value=get_placeholder_plot)
                 eval_plot_metrics = gr.Plot(label="Metrics", value=get_placeholder_plot)
 
         # Logic

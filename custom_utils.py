@@ -153,7 +153,7 @@ def evaluate_model(model_path, test_dir):
         color = cmap(i / len(unique_labels))
         ax.scatter(points[:, 0], points[:, 1], label=label, color=color, s=60, alpha=0.8)
     
-    ax.set_title(f"t-SNE Visualization (MRR: {mrr_score:.4f})")
+    ax.set_title(f"t-SNE Visualisation (MRR: {mrr_score:.4f})")
     if len(unique_labels) <= 20:
         ax.legend()
     else:
@@ -185,7 +185,7 @@ def plot_tsne(embeddings, true_labels, mrr_score):
         color = cmap(i / len(unique_labels))
         ax.scatter(points[:, 0], points[:, 1], label=label, color=color, s=60, alpha=0.8)
     
-    ax.set_title(f"t-SNE Visualization (MRR: {mrr_score:.4f})")
+    ax.set_title(f"t-SNE Visualisation (MRR: {mrr_score:.4f})")
     if len(unique_labels) <= 20:
         ax.legend()
     
