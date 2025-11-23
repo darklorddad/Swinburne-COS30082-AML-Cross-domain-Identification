@@ -325,7 +325,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 outputs=[dp_status_message]
             )
 
-    with gr.Tab("Evaluation", visible=CUSTOM_UTILS_AVAILABLE):
+    with gr.Tab("Evaluation"):
         with gr.Accordion("Evaluation (Test Set)", open=False):
             with gr.Column():
                 # Model Selection (Same as Inference)
@@ -381,6 +381,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 outputs=[eval_output_text, eval_plot_tsne, eval_plot_am]
             )
 
+    with gr.Tab("Custom", visible=CUSTOM_UTILS_AVAILABLE):
         with gr.Accordion("Evaluation (Dataset - MRR & t-SNE)", open=False):
             with gr.Column():
                 eval_ds_model_path = gr.Dropdown(label="Select Model", choices=[], value=None)
@@ -395,7 +396,6 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 outputs=[eval_ds_output_text, eval_ds_plot]
             )
 
-    with gr.Tab("Custom", visible=CUSTOM_UTILS_AVAILABLE):
         with gr.Accordion("Sort Dataset (PlantCLEF)", open=False):
             with gr.Column():
                 cust_source_dir = gr.Textbox(label="Source directory")
