@@ -97,11 +97,27 @@ def util_save_training_metrics(json_path, save_dir):
     figures = util_plot_training_metrics(json_path)
     
     saved_count = 1 # CSV
+    
+    # Mapping for specific full names to ensure "Evaluation" prefix where appropriate
+    name_map = {
+        'Accuracy': 'Evaluation accuracy',
+        'F1 Scores': 'Evaluation F1 scores',
+        'Precision': 'Evaluation precision',
+        'Recall': 'Evaluation recall',
+    }
+
     for name, fig in figures.items():
         if fig:
+            # Apply specific mapping if exists
+            full_name = name_map.get(name, name)
+            
+            # Expand "Eval" to "Evaluation"
+            if full_name.startswith("Eval "):
+                full_name = full_name.replace("Eval ", "Evaluation ", 1)
+
             # Name format: Sentence case with dash, no space.
-            # e.g. "Eval Steps/sec" -> "Eval-steps-sec.png"
-            clean_name = name.replace('/', '-').replace(' ', '-')
+            # e.g. "Evaluation Steps/sec" -> "Evaluation-steps-sec.png"
+            clean_name = full_name.replace('/', '-').replace(' ', '-')
             parts = clean_name.split('-')
             # Capitalize first part, lowercase rest
             formatted_parts = [parts[0].capitalize()] + [p.lower() for p in parts[1:]]
