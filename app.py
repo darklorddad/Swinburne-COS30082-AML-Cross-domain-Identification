@@ -62,6 +62,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                         label="Architecture name (timm)", 
                         placeholder="e.g. resnet50, vit_base_patch16_224"
                     )
+                    inf_pth_classes = gr.File(label="Upload class list (txt/json)", file_types=[".txt", ".json"])
 
                 inf_input_image = gr.Image(type="pil", label="Upload a plant image")
 
@@ -84,7 +85,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
         inf_button.click(
             fn=classify_plant, 
-            inputs=[inf_source, inf_model_path, inf_hf_id, inf_pth_file, inf_pth_arch, inf_input_image], 
+            inputs=[inf_source, inf_model_path, inf_hf_id, inf_pth_file, inf_pth_arch, inf_pth_classes, inf_input_image], 
             outputs=inf_output_label
         )
 
@@ -162,24 +163,6 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
     with gr.Tab("Dataset preparation"):
         
-        with gr.Accordion("Generate directory manifest", open=False):
-            with gr.Column():
-                dp_directory_path = gr.Textbox(
-                    label="Directory path"
-                )
-                dp_manifest_save_path = gr.Textbox(
-                    label="Manifest output path"
-                )
-                dp_manifest_type = gr.Radio(["Directories only", "Directories and files"], label="Manifest content", value="Directories only")
-                dp_generate_button = gr.Button("Generate", variant="primary")
-                dp_status_message = gr.Textbox(label="Status", interactive=False, lines=5)
-            
-            dp_generate_button.click(
-                fn=generate_manifest,
-                inputs=[dp_directory_path, dp_manifest_save_path, dp_manifest_type],
-                outputs=[dp_status_message]
-            )
-
         with gr.Accordion("Clean dataset names (Snake Case)", open=False):
             with gr.Column():
                 cn_source_dir = gr.Textbox(label="Source directory")
@@ -315,6 +298,25 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 fn=split_dataset,
                 inputs=[ds_source_dir, ds_train_output_dir, ds_val_output_dir, ds_test_output_dir, ds_train_manifest_path, ds_val_manifest_path, ds_test_manifest_path, ds_split_type, ds_train_ratio, ds_val_ratio, ds_test_ratio, ds_resample],
                 outputs=ds_status_message
+            )
+
+    with gr.Tab("Utilities and Evaluation"):
+        with gr.Accordion("Generate directory manifest", open=False):
+            with gr.Column():
+                dp_directory_path = gr.Textbox(
+                    label="Directory path"
+                )
+                dp_manifest_save_path = gr.Textbox(
+                    label="Manifest output path"
+                )
+                dp_manifest_type = gr.Radio(["Directories only", "Directories and files"], label="Manifest content", value="Directories only")
+                dp_generate_button = gr.Button("Generate", variant="primary")
+                dp_status_message = gr.Textbox(label="Status", interactive=False, lines=5)
+            
+            dp_generate_button.click(
+                fn=generate_manifest,
+                inputs=[dp_directory_path, dp_manifest_save_path, dp_manifest_type],
+                outputs=[dp_status_message]
             )
 
     with gr.Tab("Custom"):

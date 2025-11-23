@@ -20,6 +20,7 @@ from sklearn.neighbors import NearestNeighbors
 import queue
 import threading
 import re
+import json
 
 from utils import (
     util_plot_training_metrics,
@@ -28,7 +29,7 @@ from utils import (
 
 
 
-def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, input_image) -> dict:
+def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, input_image) -> dict:
     if input_image is None:
         raise gr.Error("Please upload an image.")
 
@@ -151,8 +152,42 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, input_ima
             probabilities = torch.nn.functional.softmax(output[0], dim=0)
             top5_prob, top5_indices = torch.topk(probabilities, 5)
             
-            # Since .pth files don't store class names, we return Class Indices
-            return {f"Class {i.item()}": p.item() for i, p in zip(top5_indices, top5_prob)}
+            # Load class names if provided
+            class_names = None
+            if pth_classes is not None:
+                try:
+                    if pth_classes.name.lower().endswith('.json'):
+                        with open(pth_classes.name, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            if isinstance(data, list):
+                                class_names = data
+                            elif isinstance(data, dict):
+                                # Assume id2label dict (str(int) -> label)
+                                try:
+                                    # Sort by integer key
+                                    sorted_items = sorted(data.items(), key=lambda x: int(x[0]))
+                                    class_names = [v for k, v in sorted_items]
+                                except ValueError:
+                                    # Fallback: just values
+                                    class_names = list(data.values())
+                    else:
+                        # Assume txt file, one class per line
+                        with open(pth_classes.name, 'r', encoding='utf-8') as f:
+                            class_names = [line.strip() for line in f if line.strip()]
+                except Exception as e:
+                    print(f"Warning: Failed to load class list: {e}")
+
+            # Map indices to labels
+            results = {}
+            for i, p in zip(top5_indices, top5_prob):
+                idx = i.item()
+                if class_names and idx < len(class_names):
+                    label = class_names[idx]
+                else:
+                    label = f"Class {idx}"
+                results[label] = p.item()
+            
+            return results
 
         except Exception as e:
             raise gr.Error(f"Failed to load .pth file: {e}")
