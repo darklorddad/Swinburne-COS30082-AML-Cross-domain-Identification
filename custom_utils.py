@@ -163,6 +163,121 @@ def evaluate_model(model_path, test_dir):
     
     return result_text, fig
 
+def evaluate_dataset(model_path, dataset_dir):
+    if not model_path:
+        raise gr.Error("Please select a model.")
+    if not dataset_dir or not os.path.isdir(dataset_dir):
+        raise gr.Error("Please provide a valid dataset directory.")
+
+    checkpoint_path = get_latest_checkpoint(model_path)
+    if not checkpoint_path:
+        raise gr.Error(f"No valid model checkpoint found in {model_path}")
+
+    try:
+        processor = AutoImageProcessor.from_pretrained(checkpoint_path, local_files_only=True)
+        model = AutoModelForImageClassification.from_pretrained(checkpoint_path, local_files_only=True)
+    except Exception as e:
+        raise gr.Error(f"Failed to load model: {e}")
+
+    model.eval()
+    
+    # Prepare labels
+    id2label = model.config.id2label
+    label2id = {v: k for k, v in id2label.items()}
+    
+    true_labels = []
+    embeddings = []
+    ranks = []
+    
+    # Collect all image paths and their ground truth labels from folder structure
+    image_paths = []
+    image_labels = []
+    
+    for root, dirs, files in os.walk(dataset_dir):
+        class_name = os.path.basename(root)
+        # Skip if class_name is not in model labels
+        if class_name not in label2id:
+            continue
+            
+        for file in files:
+            if file.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+                image_paths.append(os.path.join(root, file))
+                image_labels.append(class_name)
+                
+    if not image_paths:
+        raise gr.Error("No valid images found in dataset directory matching model labels.")
+
+    progress = gr.Progress()
+    
+    with torch.no_grad():
+        for i, img_path in enumerate(progress.tqdm(image_paths, desc="Processing images")):
+            gt_label = image_labels[i]
+            gt_id = label2id[gt_label]
+            
+            try:
+                image = Image.open(img_path).convert("RGB")
+                inputs = processor(images=image, return_tensors="pt")
+            except Exception as e:
+                print(f"Error processing {img_path}: {e}")
+                continue
+                
+            outputs = model(**inputs, output_hidden_states=True)
+            logits = outputs.logits[0]
+            
+            if outputs.hidden_states:
+                last_hidden = outputs.hidden_states[-1][0] 
+                if last_hidden.dim() == 2:
+                    emb = last_hidden.mean(dim=0)
+                elif last_hidden.dim() == 3:
+                    emb = last_hidden.mean(dim=[1, 2])
+                else:
+                    emb = last_hidden
+                embeddings.append(emb.numpy())
+            else:
+                embeddings.append(logits.numpy())
+
+            true_labels.append(gt_label)
+            
+            sorted_indices = torch.argsort(logits, descending=True)
+            rank = (sorted_indices == gt_id).nonzero(as_tuple=True)[0].item() + 1
+            ranks.append(1.0 / rank)
+
+    if not ranks:
+        return "No valid labeled images found for evaluation.", None
+
+    mrr_score = np.mean(ranks)
+    result_text = f"Mean Reciprocal Rank (MRR): {mrr_score:.4f}\nProcessed {len(ranks)} images."
+
+    if len(embeddings) < 2:
+        return result_text + "\nNot enough data for t-SNE.", None
+        
+    embeddings_np = np.array(embeddings)
+    n_samples = embeddings_np.shape[0]
+    perplexity = min(30, n_samples - 1)
+    
+    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42, init='pca', learning_rate='auto')
+    tsne_results = tsne.fit_transform(embeddings_np)
+    
+    fig, ax = plt.subplots(figsize=(10, 8))
+    unique_labels = list(set(true_labels))
+    cmap = plt.get_cmap('tab10' if len(unique_labels) <= 10 else 'viridis')
+    
+    for i, label in enumerate(unique_labels):
+        indices = [j for j, l in enumerate(true_labels) if l == label]
+        points = tsne_results[indices]
+        color = cmap(i / len(unique_labels))
+        ax.scatter(points[:, 0], points[:, 1], label=label, color=color, s=60, alpha=0.8)
+    
+    ax.set_title(f"t-SNE Visualization (MRR: {mrr_score:.4f})")
+    if len(unique_labels) <= 20:
+        ax.legend()
+    else:
+        result_text += "\n(Legend hidden due to high number of classes)"
+    
+    plt.tight_layout()
+    
+    return result_text, fig
+
 def custom_sort_dataset(source_dir, destination_dir, species_list_path, pairs_list_path):
     """Sorts dataset into class folders named by species, renaming images with metadata."""
     if not destination_dir:
