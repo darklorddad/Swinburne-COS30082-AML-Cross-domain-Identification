@@ -7,13 +7,13 @@ from gradio_wrapper import (
     clean_dataset_names, save_metrics, evaluate_test_set, save_evaluation_results
 )
 try:
-    from custom_utils import custom_sort_dataset, rename_test_images_func, evaluate_dataset
+    from custom_utils import custom_sort_dataset, rename_test_images_func, sort_test_dataset
     CUSTOM_UTILS_AVAILABLE = True
 except ImportError:
     CUSTOM_UTILS_AVAILABLE = False
     def custom_sort_dataset(*args, **kwargs): raise gr.Error("custom_utils not available")
     def rename_test_images_func(*args, **kwargs): raise gr.Error("custom_utils not available")
-    def evaluate_dataset(*args, **kwargs): raise gr.Error("custom_utils not available")
+    def sort_test_dataset(*args, **kwargs): raise gr.Error("custom_utils not available")
 
 DEFAULT_MANIFEST_PATH = os.path.join('core', 'manifest.md').replace(os.sep, '/')
 
@@ -424,18 +424,19 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             )
 
     with gr.Tab("Custom", visible=CUSTOM_UTILS_AVAILABLE):
-        with gr.Accordion("Evaluation (Dataset - MRR & t-SNE)", open=False):
+        with gr.Accordion("Sort Test Dataset (PlantCLEF)", open=False):
             with gr.Column():
-                eval_ds_model_path = gr.Dropdown(label="Select Model", choices=[], value=None)
-                eval_ds_dir = gr.Textbox(label="Dataset Directory (Class folders)", value="")
-                eval_ds_button = gr.Button("Run Evaluation", variant="primary")
-                eval_ds_output_text = gr.Textbox(label="Results", interactive=False)
-                eval_ds_plot = gr.Plot(label="t-SNE Visualization")
+                std_test_dir = gr.Textbox(label="Test Directory (Flat images)", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Test"))
+                std_dest_dir = gr.Textbox(label="Destination Directory (Class folders)", value="Sorted_Test_Set")
+                std_groundtruth_path = gr.Textbox(label="Groundtruth File Path", value=os.path.join("AML-dataset", "AML_project_herbarium_dataset", "list", "groundtruth.txt"))
+                std_species_list_path = gr.Textbox(label="Species List Path", value=os.path.join("AML-dataset", "AML_project_herbarium_dataset", "list", "species_list.txt"))
+                std_button = gr.Button("Sort Test Set", variant="primary")
+                std_status = gr.Textbox(label="Status", interactive=False, lines=5)
             
-            eval_ds_button.click(
-                fn=evaluate_dataset,
-                inputs=[eval_ds_model_path, eval_ds_dir],
-                outputs=[eval_ds_output_text, eval_ds_plot]
+            std_button.click(
+                fn=sort_test_dataset,
+                inputs=[std_test_dir, std_dest_dir, std_groundtruth_path, std_species_list_path],
+                outputs=[std_status]
             )
 
         with gr.Accordion("Sort Dataset (PlantCLEF)", open=False):
@@ -470,12 +471,12 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
     refresh_button.click(
         fn=update_model_choices,
         inputs=[inf_model_path],
-        outputs=[inf_model_path, metrics_model_path, eval_model_path, eval_ds_model_path]
+        outputs=[inf_model_path, metrics_model_path, eval_model_path]
     )
     demo.load(
         fn=update_model_choices,
         inputs=[],
-        outputs=[inf_model_path, metrics_model_path, eval_model_path, eval_ds_model_path]
+        outputs=[inf_model_path, metrics_model_path, eval_model_path]
     )
 
 if __name__ == "__main__":
