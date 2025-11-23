@@ -243,7 +243,15 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
 
     # Create a normalized map of model labels
     # label2id keys are the class names the model knows
-    norm_model_labels = {normalize_name(k): k for k in label2id.keys()}
+    norm_model_labels = {}
+    for k in label2id.keys():
+        # 1. Full normalized match
+        norm_model_labels[normalize_name(k)] = k
+        # 2. If format is "ID; Name", match against Name part
+        if ';' in k:
+            parts = k.split(';', 1)
+            if len(parts) == 2:
+                norm_model_labels[normalize_name(parts[1])] = k
     
     found_folders = []
     
