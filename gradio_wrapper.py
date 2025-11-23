@@ -37,7 +37,7 @@ def plot_tsne(embeddings, true_labels, mrr_score):
     tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42, init='pca', learning_rate='auto')
     tsne_results = tsne.fit_transform(embeddings_np)
     
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(10, 6))
     
     unique_labels = list(set(true_labels))
     cmap = plt.get_cmap('tab10' if len(unique_labels) <= 10 else 'viridis')
@@ -211,7 +211,7 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
 
 
 def plot_metrics(mrr, top1, top5):
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(10, 6))
     metrics = ['MRR', 'Top-1 Acc', 'Top-5 Acc']
     values = [mrr, top1, top5]
     bars = ax.bar(metrics, values, color=['#3498db', '#2ecc71', '#9b59b6'])
