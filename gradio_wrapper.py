@@ -100,19 +100,7 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, input_ima
             raise gr.Error("timm is required to load .pth files. Please install it via 'pip install timm'.")
 
         try:
-            # 1. Create Model Skeleton
-            # Attempt to clean the architecture name if the user pasted a HF ID (e.g. timm/resnet50)
-            clean_arch = pth_arch
-            if pth_arch.startswith("timm/"):
-                clean_arch = pth_arch.replace("timm/", "")
-
-            try:
-                model = timm.create_model(clean_arch, pretrained=False)
-            except Exception:
-                # If cleaning didn't help, try the original input
-                model = timm.create_model(pth_arch, pretrained=False)
-            
-            # 2. Load Weights
+            # 1. Load Weights first to inspect shape
             state_dict = torch.load(pth_file.name, map_location=torch.device('cpu'))
             
             # Handle cases where state_dict might be wrapped
@@ -120,6 +108,32 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, input_ima
                 state_dict = state_dict['state_dict']
             elif 'model' in state_dict:
                 state_dict = state_dict['model']
+
+            # 2. Infer num_classes from the weights
+            num_classes = None
+            # Common head names in timm models
+            for key in ['head.weight', 'fc.weight', 'classifier.weight']:
+                if key in state_dict:
+                    num_classes = state_dict[key].shape[0]
+                    break
+
+            # 3. Create Model Skeleton
+            # Attempt to clean the architecture name if the user pasted a HF ID (e.g. timm/resnet50)
+            clean_arch = pth_arch
+            if pth_arch.startswith("timm/"):
+                clean_arch = pth_arch.replace("timm/", "")
+
+            try:
+                kwargs = {'pretrained': False}
+                if num_classes is not None:
+                    kwargs['num_classes'] = num_classes
+                model = timm.create_model(clean_arch, **kwargs)
+            except Exception:
+                # If cleaning didn't help, try the original input
+                kwargs = {'pretrained': False}
+                if num_classes is not None:
+                    kwargs['num_classes'] = num_classes
+                model = timm.create_model(pth_arch, **kwargs)
                 
             model.load_state_dict(state_dict)
             model.eval()
