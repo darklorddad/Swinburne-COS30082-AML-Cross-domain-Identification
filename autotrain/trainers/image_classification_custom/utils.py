@@ -232,7 +232,7 @@ def process_data(train_data, valid_data, image_processor, config):
             A.RandomRotate90(),
             A.HorizontalFlip(p=0.5),
             A.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1, p=config.augment_prob),
-            A.ToGray(p=0.2),
+            A.ToGray(p=config.grayscale_prob),
             A.Normalize(mean=mean, std=std),
         ]
     )

@@ -197,7 +197,7 @@ def train(config):
 
     warmup_args = training_args.copy()
     warmup_args["num_train_epochs"] = config.warmup_epochs
-    warmup_args["learning_rate"] = 1e-3
+    warmup_args["learning_rate"] = config.head_lr
 
     args_warmup = TrainingArguments(**warmup_args)
 
@@ -219,8 +219,8 @@ def train(config):
 
     optimizer = torch.optim.AdamW(
         [
-            {"params": model.backbone.parameters(), "lr": 1e-5},
-            {"params": head_params, "lr": 1e-3},
+            {"params": model.backbone.parameters(), "lr": config.backbone_lr},
+            {"params": head_params, "lr": config.head_lr},
         ],
         weight_decay=config.weight_decay,
     )
