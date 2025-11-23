@@ -156,26 +156,33 @@ def train(config):
     )
     train_data, valid_data = utils.process_data(train_data, valid_data, image_processor, config)
 
+    scheduler = config.scheduler
+    if scheduler == "cosine_warmup":
+        scheduler = "cosine"
+
     training_args = dict(
         output_dir=config.project_name,
         per_device_train_batch_size=config.batch_size,
         per_device_eval_batch_size=config.batch_size,
         learning_rate=config.lr,
         num_train_epochs=config.epochs,
-        save_strategy="epoch",
-        eval_strategy="epoch" if valid_data else "no",
+        save_strategy=config.eval_strategy if valid_data else "no",
+        eval_strategy=config.eval_strategy if valid_data else "no",
         logging_steps=config.logging_steps,
         save_total_limit=config.save_total_limit,
         remove_unused_columns=False,
         label_names=["labels"],
         optim=config.optimizer,
+        lr_scheduler_type=scheduler,
         warmup_ratio=config.warmup_ratio,
         weight_decay=config.weight_decay,
+        max_grad_norm=config.max_grad_norm,
         gradient_accumulation_steps=config.gradient_accumulation,
         fp16=config.mixed_precision == "fp16",
         bf16=config.mixed_precision == "bf16",
         load_best_model_at_end=True if valid_data else False,
         report_to=config.log,
+        auto_find_batch_size=config.auto_find_batch_size,
     )
 
     args = TrainingArguments(**training_args)
