@@ -263,6 +263,13 @@ def train(config):
         logger.info("Using Class Balanced Sampler")
 
     # Prepare custom config for saving
+    if image_processor is not None and hasattr(image_processor, "size"):
+        image_size = image_processor.size
+    elif image_processor is not None and hasattr(image_processor, "crop_size"):
+        image_size = image_processor.crop_size
+    else:
+        image_size = {"height": 224, "width": 224}
+
     custom_config = {
         "architectures": ["ArcFaceClassifier"],
         "model_type": "custom_arcface",
@@ -270,7 +277,7 @@ def train(config):
         "num_classes": num_classes,
         "arcface_s": config.arcface_s,
         "arcface_m": config.arcface_m,
-        "image_size": image_processor.size if image_processor else {"height": 224, "width": 224},
+        "image_size": image_size,
         "id2label": {i: c for i, c in enumerate(classes)},
         "label2id": label2id,
     }
