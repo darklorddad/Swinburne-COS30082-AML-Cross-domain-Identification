@@ -1,8 +1,12 @@
+import math
 import os
 
 import albumentations as A
 import numpy as np
 import timm
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from PIL import ImageFile
 from sklearn import metrics
 
@@ -127,6 +131,72 @@ def _multi_class_classification_metrics(pred):
     return results
 
 
+class GeM(nn.Module):
+    def __init__(self, p=3, eps=1e-6):
+        super(GeM, self).__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)
+        self.eps = eps
+
+    def forward(self, x):
+        return self.gem(x, p=self.p, eps=self.eps)
+
+    def gem(self, x, p=3, eps=1e-6):
+        return F.avg_pool2d(x.clamp(min=eps).pow(p), (x.size(-2), x.size(-1))).pow(1.0 / p)
+
+    def __repr__(self):
+        return self.__class__.__name__ + "(" + "p=" + "{:.4f}".format(self.p.data.tolist()[0]) + ", " + "eps=" + str(self.eps) + ")"
+
+
+class ArcFaceClassifier(nn.Module):
+    def __init__(self, model_name, num_classes, s=30.0, m=0.50, pretrained=True):
+        super().__init__()
+        self.backbone = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
+
+        if hasattr(self.backbone, "num_features"):
+            feat_dim = self.backbone.num_features
+        else:
+            feat_dim = self.backbone(torch.randn(1, 3, 224, 224)).shape[1]
+
+        self.pooling = GeM()
+        self.bn = nn.BatchNorm1d(feat_dim)
+        self.weight = nn.Parameter(torch.FloatTensor(num_classes, feat_dim))
+        nn.init.xavier_uniform_(self.weight)
+
+        self.s = s
+        self.m = m
+        self.cos_m = math.cos(m)
+        self.sin_m = math.sin(m)
+        self.th = math.cos(math.pi - m)
+        self.mm = math.sin(math.pi - m) * m
+        self.loss_fn = nn.CrossEntropyLoss()
+
+    def forward(self, pixel_values, labels=None):
+        features = self.backbone(pixel_values)
+
+        if len(features.shape) == 4:
+            features = self.pooling(features).flatten(1)
+        elif len(features.shape) == 3:
+            features = features.mean(dim=1)
+
+        features = self.bn(features)
+
+        if labels is None or not self.training:
+            return F.normalize(features)
+
+        cosine = F.linear(F.normalize(features), F.normalize(self.weight))
+        sine = torch.sqrt((1.0 - torch.pow(cosine, 2)).clamp(0, 1))
+        phi = cosine * self.cos_m - sine * self.sin_m
+
+        phi = torch.where(cosine > self.th, phi, cosine - self.mm)
+        one_hot = torch.zeros(cosine.size(), device=pixel_values.device)
+        one_hot.scatter_(1, labels.view(-1, 1).long(), 1)
+        output = (one_hot * phi) + ((1.0 - one_hot) * cosine)
+        output *= self.s
+
+        loss = self.loss_fn(output, labels)
+        return {"loss": loss, "logits": output}
+
+
 def process_data(train_data, valid_data, image_processor, config):
     """
     Processes training and validation data for image classification.
@@ -164,7 +234,8 @@ def process_data(train_data, valid_data, image_processor, config):
             A.RandomResizedCrop(height=height, width=width),
             A.RandomRotate90(),
             A.HorizontalFlip(p=0.5),
-            A.RandomBrightnessContrast(p=0.2),
+            A.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1, p=0.8),
+            A.ToGray(p=0.2),
             A.Normalize(mean=image_processor.image_mean, std=image_processor.image_std),
         ]
     )

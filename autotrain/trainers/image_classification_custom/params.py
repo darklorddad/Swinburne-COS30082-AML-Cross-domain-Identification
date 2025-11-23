@@ -38,6 +38,8 @@ class ImageClassificationParams(AutoTrainParams):
         log (str): Logging method for experiment tracking. Default is "none".
         early_stopping_patience (int): Number of epochs with no improvement for early stopping. Default is 5.
         early_stopping_threshold (float): Threshold for early stopping. Default is 0.01.
+        arcface_s (float): ArcFace Scale. Default is 30.0.
+        arcface_m (float): ArcFace Margin. Default is 0.5.
     """
 
     data_path: str = Field(None, title="Path to the dataset")
@@ -68,3 +70,5 @@ class ImageClassificationParams(AutoTrainParams):
     log: str = Field("none", title="Logging method for experiment tracking")
     early_stopping_patience: int = Field(5, title="Number of epochs with no improvement for early stopping")
     early_stopping_threshold: float = Field(0.01, title="Threshold for early stopping")
+    arcface_s: float = Field(30.0, title="ArcFace Scale")
+    arcface_m: float = Field(0.5, title="ArcFace Margin")

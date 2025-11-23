@@ -1,13 +1,13 @@
 import argparse
 import json
 
+import torch
 from accelerate.state import PartialState
 from datasets import load_dataset, load_from_disk
 from huggingface_hub import HfApi
 from transformers import (
     AutoConfig,
     AutoImageProcessor,
-    AutoModelForImageClassification,
     EarlyStoppingCallback,
     Trainer,
     TrainingArguments,
@@ -26,6 +26,7 @@ from autotrain.trainers.common import (
     save_training_params,
 )
 from autotrain.trainers.image_classification_custom import utils
+from autotrain.trainers.image_classification_custom.utils import ArcFaceClassifier
 from autotrain.trainers.image_classification.params import ImageClassificationParams
 
 
@@ -101,39 +102,19 @@ def train(config):
                 f"Number of classes in train and valid are not the same. Training has {num_classes} and valid has {num_classes_valid}"
             )
 
-    model_config = AutoConfig.from_pretrained(
-        config.model,
-        num_labels=num_classes,
-        trust_remote_code=ALLOW_REMOTE_CODE,
-        token=config.token,
+    model = ArcFaceClassifier(
+        model_name=config.model,
+        num_classes=num_classes,
+        s=config.arcface_s,
+        m=config.arcface_m,
     )
-    model_config._num_labels = len(label2id)
-    model_config.label2id = label2id
-    model_config.id2label = {v: k for k, v in label2id.items()}
 
     try:
-        model = AutoModelForImageClassification.from_pretrained(
-            config.model,
-            config=model_config,
-            trust_remote_code=ALLOW_REMOTE_CODE,
-            token=config.token,
-            ignore_mismatched_sizes=True,
-        )
-    except OSError:
-        model = AutoModelForImageClassification.from_pretrained(
-            config.model,
-            config=model_config,
-            from_tf=True,
-            trust_remote_code=ALLOW_REMOTE_CODE,
-            token=config.token,
-            ignore_mismatched_sizes=True,
-        )
+        image_processor = AutoImageProcessor.from_pretrained(config.model, token=config.token)
+    except Exception:
+        from transformers import ConvNextImageProcessor
 
-    image_processor = AutoImageProcessor.from_pretrained(
-        config.model,
-        token=config.token,
-        trust_remote_code=ALLOW_REMOTE_CODE,
-    )
+        image_processor = ConvNextImageProcessor.from_pretrained("facebook/convnext-tiny-224")
     train_data, valid_data = utils.process_data(train_data, valid_data, image_processor, config)
 
     if config.logging_steps == -1:
@@ -176,6 +157,7 @@ def train(config):
         push_to_hub=False,
         load_best_model_at_end=True if config.valid_split is not None else False,
         ddp_find_unused_parameters=False,
+        remove_unused_columns=False,
     )
 
     if config.valid_split is not None:
@@ -210,16 +192,51 @@ def train(config):
         ),
     )
 
+    logger.info("--- STEP A: WARMUP (Freezing Backbone) ---")
+    for param in model.backbone.parameters():
+        param.requires_grad = False
+
+    warmup_args = training_args.copy()
+    warmup_args["num_train_epochs"] = 5
+    warmup_args["learning_rate"] = 1e-3
+
+    args_warmup = TrainingArguments(**warmup_args)
+
+    trainer_warmup = Trainer(
+        args=args_warmup,
+        model=model,
+        train_dataset=train_data,
+        eval_dataset=valid_data,
+    )
+    trainer_warmup.remove_callback(PrinterCallback)
+    trainer_warmup.train()
+
+    logger.info("--- STEP B: FINE-TUNING (Unfreezing Backbone) ---")
+    for param in model.backbone.parameters():
+        param.requires_grad = True
+
+    head_params = list(map(id, model.backbone.parameters()))
+    base_params = filter(lambda p: id(p) not in head_params, model.parameters())
+
+    optimizer = torch.optim.AdamW(
+        [
+            {"params": model.backbone.parameters(), "lr": 1e-5},
+            {"params": base_params, "lr": 1e-3},
+        ],
+        weight_decay=config.weight_decay,
+    )
+
     trainer = Trainer(
         **trainer_args,
         train_dataset=train_data,
         eval_dataset=valid_data,
+        optimizers=(optimizer, None),
     )
     trainer.remove_callback(PrinterCallback)
     trainer.train()
 
     logger.info("Finished training, saving model...")
-    trainer.save_model(config.project_name)
+    torch.save(model.state_dict(), f"{config.project_name}/pytorch_model.bin")
     image_processor.save_pretrained(config.project_name)
 
     model_card = utils.create_model_card(config, trainer, num_classes)
