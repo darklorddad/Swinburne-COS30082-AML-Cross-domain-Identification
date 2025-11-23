@@ -288,18 +288,6 @@ UI_PARAMS = {
         "label": "Distributed backend",
         "options": ["ddp", "deepspeed"],
     },
-    "arcface_s": {
-        "type": "number",
-        "label": "ArcFace Scale (s)",
-    },
-    "arcface_m": {
-        "type": "number",
-        "label": "ArcFace Margin (m)",
-    },
-    "sub_centers": {
-        "type": "number",
-        "label": "Sub-centers (K)",
-    },
 }
 
 
@@ -483,7 +471,7 @@ async def fetch_model_choices(
         hub_models = MODEL_CHOICE["llm"]
     elif task.startswith("st:"):
         hub_models = MODEL_CHOICE["sentence-transformers"]
-    elif task.startswith("image-classification"):
+    elif task == "image-classification":
         hub_models = MODEL_CHOICE["image-classification"]
     elif task == "seq2seq":
         hub_models = MODEL_CHOICE["seq2seq"]
@@ -600,7 +588,7 @@ async def handle_form(
     if len(hub_dataset) == 0:
         file_extension = os.path.splitext(data_files_training[0].filename)[1]
         file_extension = file_extension[1:] if file_extension.startswith(".") else file_extension
-        if task.startswith("image-classification"):
+        if task == "image-classification":
             dset = AutoTrainImageClassificationDataset(
                 train_data=training_files[0],
                 token=token,

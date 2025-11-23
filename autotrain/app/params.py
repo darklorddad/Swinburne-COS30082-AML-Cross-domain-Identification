@@ -196,7 +196,7 @@ class AppParams:
             return self._munge_params_text_clf()
         elif self.task == "seq2seq":
             return self._munge_params_seq2seq()
-        elif self.task.startswith("image-classification"):
+        elif self.task == "image-classification":
             return self._munge_params_img_clf()
         elif self.task == "image-object-detection":
             return self._munge_params_img_obj_det()
@@ -418,11 +418,6 @@ class AppParams:
             _params["train_split"] = self.train_split
             _params["valid_split"] = self.valid_split
 
-        if ":" in self.task:
-            _params["trainer"] = self.task.split(":")[1]
-        else:
-            _params["trainer"] = "default"
-
         return ImageClassificationParams(**_params)
 
     def _munge_params_img_reg(self):
@@ -519,10 +514,6 @@ def get_task_params(task, param_type):
         task = task.split(":")[0].lower()
 
     if task.startswith("vlm:"):
-        trainer = task.split(":")[1].lower()
-        task = task.split(":")[0].lower()
-
-    if task.startswith("image-classification:"):
         trainer = task.split(":")[1].lower()
         task = task.split(":")[0].lower()
 
@@ -669,25 +660,19 @@ def get_task_params(task, param_type):
             "early_stopping_threshold",
         ]
         task_params = {k: v for k, v in task_params.items() if k not in more_hidden_params}
-    if task == "image-classification":
-        more_hidden_params = []
-        if "trainer" not in locals() or trainer == "default":
-            more_hidden_params = ["arcface_s", "arcface_m", "sub_centers"]
-        if param_type == "basic":
-            more_hidden_params.extend(
-                [
-                    "warmup_ratio",
-                    "weight_decay",
-                    "max_grad_norm",
-                    "seed",
-                    "logging_steps",
-                    "auto_find_batch_size",
-                    "save_total_limit",
-                    "eval_strategy",
-                    "early_stopping_patience",
-                    "early_stopping_threshold",
-                ]
-            )
+    if task == "image-classification" and param_type == "basic":
+        more_hidden_params = [
+            "warmup_ratio",
+            "weight_decay",
+            "max_grad_norm",
+            "seed",
+            "logging_steps",
+            "auto_find_batch_size",
+            "save_total_limit",
+            "eval_strategy",
+            "early_stopping_patience",
+            "early_stopping_threshold",
+        ]
         task_params = {k: v for k, v in task_params.items() if k not in more_hidden_params}
     if task == "image-regression" and param_type == "basic":
         more_hidden_params = [
