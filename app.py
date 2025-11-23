@@ -133,7 +133,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         # 2. Test Set & Run
         with gr.Column(visible=False) as eval_run_container:
             with gr.Accordion("Evaluation Settings", open=True):
-                eval_test_dir = gr.Textbox(label="Path to test set", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Test"))
+                eval_test_dir = gr.Textbox(label="Path to test set", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set"))
                 eval_button = gr.Button("Run evaluation", variant="primary")
 
         # 3. Save Evaluation (Hidden until run)
@@ -461,7 +461,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
         with gr.Accordion("Rename Test Images (PlantCLEF)", open=False):
             with gr.Column():
-                rti_test_dir = gr.Textbox(label="Test Directory", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Test"))
+                rti_test_dir = gr.Textbox(label="Test Directory", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set"))
                 rti_groundtruth_path = gr.Textbox(label="Groundtruth File Path", value=os.path.join("AML-dataset", "AML_project_herbarium_dataset", "list", "groundtruth.txt"))
                 rti_species_list_path = gr.Textbox(label="Species List Path", value=os.path.join("AML-dataset", "AML_project_herbarium_dataset", "list", "species_list.txt"))
                 rti_button = gr.Button("Rename Images", variant="primary")
