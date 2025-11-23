@@ -320,6 +320,33 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             )
 
     with gr.Tab("Evaluation"):
+        with gr.Accordion("Evaluation (Test Set - MRR & t-SNE)", open=False):
+            with gr.Column():
+                eval_model_path = gr.Dropdown(label="Select Model", choices=[], value=None)
+                eval_test_dir = gr.Textbox(label="Test Directory (with renamed images)", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Test"))
+                eval_button = gr.Button("Run Evaluation", variant="primary")
+                eval_output_text = gr.Textbox(label="Results", interactive=False)
+                eval_plot = gr.Plot(label="t-SNE Visualization")
+            
+            eval_button.click(
+                fn=evaluate_model,
+                inputs=[eval_model_path, eval_test_dir],
+                outputs=[eval_output_text, eval_plot]
+            )
+
+        with gr.Accordion("Evaluation (Dataset - MRR & t-SNE)", open=False):
+            with gr.Column():
+                eval_ds_model_path = gr.Dropdown(label="Select Model", choices=[], value=None)
+                eval_ds_dir = gr.Textbox(label="Dataset Directory (Class folders)", value="")
+                eval_ds_button = gr.Button("Run Evaluation", variant="primary")
+                eval_ds_output_text = gr.Textbox(label="Results", interactive=False)
+                eval_ds_plot = gr.Plot(label="t-SNE Visualization")
+            
+            eval_ds_button.click(
+                fn=evaluate_dataset,
+                inputs=[eval_ds_model_path, eval_ds_dir],
+                outputs=[eval_ds_output_text, eval_ds_plot]
+            )
 
     with gr.Tab("Custom"):
         with gr.Accordion("Sort Dataset (PlantCLEF)", open=False):
@@ -349,34 +376,6 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 fn=rename_test_images_func,
                 inputs=[rti_test_dir, rti_groundtruth_path, rti_species_list_path],
                 outputs=[rti_status]
-            )
-
-        with gr.Accordion("Evaluation (Test Set - MRR & t-SNE)", open=False):
-            with gr.Column():
-                eval_model_path = gr.Dropdown(label="Select Model", choices=[], value=None)
-                eval_test_dir = gr.Textbox(label="Test Directory (with renamed images)", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Test"))
-                eval_button = gr.Button("Run Evaluation", variant="primary")
-                eval_output_text = gr.Textbox(label="Results", interactive=False)
-                eval_plot = gr.Plot(label="t-SNE Visualization")
-            
-            eval_button.click(
-                fn=evaluate_model,
-                inputs=[eval_model_path, eval_test_dir],
-                outputs=[eval_output_text, eval_plot]
-            )
-
-        with gr.Accordion("Evaluation (Dataset - MRR & t-SNE)", open=False):
-            with gr.Column():
-                eval_ds_model_path = gr.Dropdown(label="Select Model", choices=[], value=None)
-                eval_ds_dir = gr.Textbox(label="Dataset Directory (Class folders)", value="")
-                eval_ds_button = gr.Button("Run Evaluation", variant="primary")
-                eval_ds_output_text = gr.Textbox(label="Results", interactive=False)
-                eval_ds_plot = gr.Plot(label="t-SNE Visualization")
-            
-            eval_ds_button.click(
-                fn=evaluate_dataset,
-                inputs=[eval_ds_model_path, eval_ds_dir],
-                outputs=[eval_ds_output_text, eval_ds_plot]
             )
 
     refresh_button.click(
