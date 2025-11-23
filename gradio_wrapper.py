@@ -101,10 +101,16 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, input_ima
 
         try:
             # 1. Create Model Skeleton
-            if pth_arch not in timm.list_models():
-                raise gr.Error(f"Architecture '{pth_arch}' not found in timm.")
-            
-            model = timm.create_model(pth_arch, pretrained=False)
+            # Attempt to clean the architecture name if the user pasted a HF ID (e.g. timm/resnet50)
+            clean_arch = pth_arch
+            if pth_arch.startswith("timm/"):
+                clean_arch = pth_arch.replace("timm/", "")
+
+            try:
+                model = timm.create_model(clean_arch, pretrained=False)
+            except Exception:
+                # If cleaning didn't help, try the original input
+                model = timm.create_model(pth_arch, pretrained=False)
             
             # 2. Load Weights
             state_dict = torch.load(pth_file.name, map_location=torch.device('cpu'))
