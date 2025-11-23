@@ -112,7 +112,7 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
     elif source_type == "Local .pth":
         model_type = "timm"
         if not pth_file:
-            raise gr.Error("Please upload a .pth file.")
+            raise gr.Error("Please provide path to .pth file.")
         if not pth_arch:
             raise gr.Error("Please specify the architecture name (e.g., resnet50).")
         
@@ -124,10 +124,10 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
         try:
             # 1. Load Weights
             try:
-                state_dict = torch.load(pth_file.name, map_location=torch.device('cpu'), weights_only=True)
+                state_dict = torch.load(pth_file, map_location=torch.device('cpu'), weights_only=True)
             except TypeError:
                 # Fallback for older torch versions
-                state_dict = torch.load(pth_file.name, map_location=torch.device('cpu'))
+                state_dict = torch.load(pth_file, map_location=torch.device('cpu'))
             
             if 'state_dict' in state_dict: state_dict = state_dict['state_dict']
             elif 'model' in state_dict: state_dict = state_dict['model']
@@ -158,17 +158,17 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
             
             # Load class names
             class_names = None
-            if pth_classes is not None:
+            if pth_classes:
                 try:
-                    if pth_classes.name.lower().endswith('.json'):
-                        with open(pth_classes.name, 'r', encoding='utf-8') as f:
+                    if pth_classes.lower().endswith('.json'):
+                        with open(pth_classes, 'r', encoding='utf-8') as f:
                             data = json.load(f)
                             if isinstance(data, list): class_names = data
                             elif isinstance(data, dict):
                                 sorted_items = sorted(data.items(), key=lambda x: int(x[0]))
                                 class_names = [v for k, v in sorted_items]
                     else:
-                        with open(pth_classes.name, 'r', encoding='utf-8') as f:
+                        with open(pth_classes, 'r', encoding='utf-8') as f:
                             class_names = [line.strip() for line in f if line.strip()]
                 except Exception as e:
                     print(f"Warning: Failed to load class list: {e}")
