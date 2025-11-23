@@ -37,13 +37,13 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         with gr.Row():
             with gr.Column(scale=1):
                 inf_source = gr.Radio(
-                    choices=["Local AutoTrain", "Hugging Face Hub", "Local .pth"],
-                    value="Local AutoTrain",
-                    label="Model Source"
+                    choices=["Local", "Hugging Face Hub", "Local .pth"],
+                    value="Local",
+                    label="Model source"
                 )
                 
                 inf_model_path = gr.Dropdown(
-                    label="Select Local Model", 
+                    label="Select local model", 
                     choices=[], 
                     value=None, 
                     filterable=False,
@@ -51,7 +51,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 )
                 
                 inf_hf_id = gr.Textbox(
-                    label="Hugging Face Model ID", 
+                    label="Hugging Face model ID", 
                     placeholder="e.g. microsoft/resnet-50", 
                     visible=False
                 )
@@ -59,7 +59,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 with gr.Group(visible=False) as inf_pth_group:
                     inf_pth_file = gr.File(label="Upload .pth file", file_types=[".pth"])
                     inf_pth_arch = gr.Textbox(
-                        label="Architecture Name (timm)", 
+                        label="Architecture name (timm)", 
                         placeholder="e.g. resnet50, vit_base_patch16_224"
                     )
 
@@ -71,7 +71,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
         def update_inf_inputs(source):
             return (
-                gr.update(visible=(source == "Local AutoTrain")),
+                gr.update(visible=(source == "Local")),
                 gr.update(visible=(source == "Hugging Face Hub")),
                 gr.update(visible=(source == "Local .pth"))
             )

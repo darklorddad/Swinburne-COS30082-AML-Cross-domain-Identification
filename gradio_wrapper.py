@@ -44,15 +44,15 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, input_ima
     model = None
     image_processor = None
     
-    # --- CASE 1: Local AutoTrain or Hugging Face Hub ---
-    if source_type in ["Local AutoTrain", "Hugging Face Hub"]:
-        model_id = local_path if source_type == "Local AutoTrain" else hf_id
+    # --- CASE 1: Local or Hugging Face Hub ---
+    if source_type in ["Local", "Hugging Face Hub"]:
+        model_id = local_path if source_type == "Local" else hf_id
         
         if not model_id:
             raise gr.Error(f"Please specify the {source_type} model.")
 
-        # Handle Local AutoTrain checkpoint logic
-        if source_type == "Local AutoTrain":
+        # Handle Local checkpoint logic
+        if source_type == "Local":
             if os.path.isfile(model_id):
                 model_id = os.path.dirname(model_id)
             if os.path.basename(model_id).startswith('checkpoint-'):
