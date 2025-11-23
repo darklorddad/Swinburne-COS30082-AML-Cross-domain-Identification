@@ -603,11 +603,28 @@ def launch_autotrain_ui(autotrain_path: str):
     if not autotrain_path or not os.path.isdir(autotrain_path):
         return "Error: Please provide a valid path to the AutoTrain folder."
 
+    autotrain_url = "http://localhost:7861"
+
+    # Check if already running
+    try:
+        response = requests.get(autotrain_url, timeout=1)
+        if response.status_code == 200:
+            webbrowser.open(autotrain_url)
+            return f"AutoTrain is already running. Opened {autotrain_url} in browser."
+    except (requests.ConnectionError, requests.Timeout):
+        pass
+
     module_parent_dir = os.path.dirname(autotrain_path)
     env = os.environ.copy()
     env['PYTHONPATH'] = f"{module_parent_dir}{os.pathsep}{env.get('PYTHONPATH', '')}"
-    command = [sys.executable, os.path.join('launch_autotrain.py')]
-    autotrain_url = "http://localhost:7861"
+    
+    # Use absolute path for launch script
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    launch_script = os.path.join(current_dir, 'launch_autotrain.py')
+    if not os.path.exists(launch_script):
+        launch_script = 'launch_autotrain.py'
+
+    command = [sys.executable, launch_script]
     
     try:
         # Launch as a detached process
