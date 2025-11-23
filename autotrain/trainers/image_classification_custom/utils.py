@@ -189,23 +189,30 @@ class ArcFaceClassifier(nn.Module):
 
         features = self.bn(features)
 
-        # Inference: Return L2 normalized embeddings
-        if labels is None or not self.training:
-            return F.normalize(features)
-
-        # Training: ArcFace Logic
+        # Calculate logits (cosine similarity)
         cosine = F.linear(F.normalize(features), F.normalize(self.weight))
-        sine = torch.sqrt((1.0 - torch.pow(cosine, 2)).clamp(0, 1))
-        phi = cosine * self.cos_m - sine * self.sin_m
 
-        phi = torch.where(cosine > self.th, phi, cosine - self.mm)
-        one_hot = torch.zeros(cosine.size(), device=pixel_values.device)
-        one_hot.scatter_(1, labels.view(-1, 1).long(), 1)
-        output = (one_hot * phi) + ((1.0 - one_hot) * cosine)
-        output *= self.s
+        # If labels are provided (Training or Eval)
+        if labels is not None:
+            if self.training:
+                # Training: ArcFace Logic with Margin
+                sine = torch.sqrt((1.0 - torch.pow(cosine, 2)).clamp(0, 1))
+                phi = cosine * self.cos_m - sine * self.sin_m
+                phi = torch.where(cosine > self.th, phi, cosine - self.mm)
 
-        loss = self.loss_fn(output, labels)
-        return {"loss": loss, "logits": output}
+                one_hot = torch.zeros(cosine.size(), device=pixel_values.device)
+                one_hot.scatter_(1, labels.view(-1, 1).long(), 1)
+                output = (one_hot * phi) + ((1.0 - one_hot) * cosine)
+                output *= self.s
+            else:
+                # Eval: Standard Logits (scaled)
+                output = cosine * self.s
+
+            loss = self.loss_fn(output, labels)
+            return {"loss": loss, "logits": output}
+
+        # Inference (No labels): Return scaled logits
+        return cosine * self.s
 
 
 def process_data(train_data, valid_data, image_processor, config, model=None):
