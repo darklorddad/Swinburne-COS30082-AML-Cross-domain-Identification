@@ -123,7 +123,12 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
 
         try:
             # 1. Load Weights
-            state_dict = torch.load(pth_file.name, map_location=torch.device('cpu'))
+            try:
+                state_dict = torch.load(pth_file.name, map_location=torch.device('cpu'), weights_only=True)
+            except TypeError:
+                # Fallback for older torch versions
+                state_dict = torch.load(pth_file.name, map_location=torch.device('cpu'))
+            
             if 'state_dict' in state_dict: state_dict = state_dict['state_dict']
             elif 'model' in state_dict: state_dict = state_dict['model']
 
@@ -229,24 +234,54 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     image_paths = []
     image_labels = []
     
+    # Helper for fuzzy matching (snake_case normalization)
+    def normalize_name(name):
+        s = str(name).strip().lower()
+        s = re.sub(r'[\s\-]+', '_', s)
+        s = re.sub(r'[^a-z0-9_]', '', s)
+        return s.strip('_')
+
+    # Create a normalized map of model labels
+    # label2id keys are the class names the model knows
+    norm_model_labels = {normalize_name(k): k for k in label2id.keys()}
+    
+    found_folders = []
+    
     for root, dirs, files in os.walk(test_dir):
         if os.path.abspath(root) == os.path.abspath(test_dir):
             continue # Skip root folder
             
-        class_name = os.path.basename(root)
+        folder_name = os.path.basename(root)
+        found_folders.append(folder_name)
         
-        # Check if class exists in model
-        if class_name not in label2id:
-            # Optional: Log warning or skip
+        # Try exact match
+        matched_label = None
+        if folder_name in label2id:
+            matched_label = folder_name
+        # Try normalized match
+        elif normalize_name(folder_name) in norm_model_labels:
+            matched_label = norm_model_labels[normalize_name(folder_name)]
+        
+        if not matched_label:
             continue
             
         for f in files:
             if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
                 image_paths.append(os.path.join(root, f))
-                image_labels.append(class_name)
+                image_labels.append(matched_label) # Use the model's label, not the folder name
 
     if not image_paths:
-        raise gr.Error("No valid images found in test directory subfolders matching model classes.")
+        # Generate a helpful error message
+        model_classes_sample = list(label2id.keys())[:5]
+        folders_sample = found_folders[:5]
+        msg = (
+            f"No valid images found. \n"
+            f"Checked {len(found_folders)} subfolders in '{test_dir}'.\n"
+            f"Sample folders found: {folders_sample}\n"
+            f"Sample model classes: {model_classes_sample}\n"
+            f"Ensure folder names match model class names (case-insensitive, snake_case handled)."
+        )
+        raise gr.Error(msg)
 
     true_labels = []
     embeddings = []
