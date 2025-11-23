@@ -138,8 +138,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         )
 
     with gr.Tab("Training"):
-        with gr.Group():
-            gr.Markdown("### AutoTrain")
+        with gr.Accordion("AutoTrain", open=False):
             train_autotrain_path = gr.Textbox(label="Path to AutoTrain folder")
             train_launch_button = gr.Button("Launch AutoTrain UI")
             train_launch_log = gr.Textbox(label="Status", interactive=False, lines=2)
