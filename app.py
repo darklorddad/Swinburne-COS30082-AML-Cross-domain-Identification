@@ -43,33 +43,34 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
     with gr.Tab("Inference"):
         with gr.Row():
             with gr.Column(scale=1):
-                inf_source = gr.Radio(
-                    choices=["Local", "Hugging Face Hub", "Local .pth"],
-                    value="Local",
-                    label="Model source"
-                )
-                
-                inf_model_path = gr.Dropdown(
-                    label="Select local model", 
-                    choices=[], 
-                    value=None, 
-                    filterable=False,
-                    visible=True
-                )
-                
-                inf_hf_id = gr.Textbox(
-                    label="Hugging Face model ID", 
-                    placeholder="e.g. microsoft/resnet-50", 
-                    visible=False
-                )
-                
-                with gr.Group(visible=False) as inf_pth_group:
-                    inf_pth_file = gr.File(label="Upload .pth file", file_types=[".pth"])
-                    inf_pth_classes = gr.File(label="Upload class list (txt/json)", file_types=[".txt", ".json"])
-                    inf_pth_arch = gr.Textbox(
-                        label="Architecture name (timm)", 
-                        placeholder="e.g. resnet50, vit_base_patch16_224"
+                with gr.Group():
+                    inf_source = gr.Radio(
+                        choices=["Local", "Hugging Face Hub", "Local .pth"],
+                        value="Local",
+                        label="Model source"
                     )
+                    
+                    inf_model_path = gr.Dropdown(
+                        label="Select local model", 
+                        choices=[], 
+                        value=None, 
+                        filterable=False,
+                        visible=True
+                    )
+                    
+                    inf_hf_id = gr.Textbox(
+                        label="Hugging Face model ID", 
+                        placeholder="e.g. microsoft/resnet-50", 
+                        visible=False
+                    )
+                    
+                    with gr.Column(visible=False) as inf_pth_group:
+                        inf_pth_file = gr.File(label="Upload .pth file", file_types=[".pth"])
+                        inf_pth_classes = gr.File(label="Upload class list (txt/json)", file_types=[".txt", ".json"])
+                        inf_pth_arch = gr.Textbox(
+                            label="Architecture name (timm)", 
+                            placeholder="e.g. resnet50, vit_base_patch16_224"
+                        )
 
                 inf_input_image = gr.Image(type="pil", label="Upload a plant image")
 
