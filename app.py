@@ -184,12 +184,12 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         eval_pth_file.change(fn=check_model_selected, inputs=[eval_pth_file], outputs=[eval_run_container])
 
         eval_button.click(
+            fn=lambda: (gr.update(visible=True), gr.update(visible=True)),
+            outputs=[eval_results_container, eval_save_container]
+        ).then(
             fn=evaluate_test_set,
             inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file, eval_pth_arch, eval_pth_classes, eval_test_dir],
             outputs=[eval_plot_tsne, eval_plot_metrics, eval_results_state]
-        ).then(
-            fn=lambda: (gr.update(visible=True), gr.update(visible=True)),
-            outputs=[eval_results_container, eval_save_container]
         )
         
         eval_export_btn.click(

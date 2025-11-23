@@ -410,6 +410,17 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
                 
             true_labels.append(gt_label)
             total_processed += 1
+        
+        # Yield intermediate metrics
+        if total_processed > 0:
+            curr_mrr = np.mean(ranks)
+            curr_top1 = top1_correct / total_processed
+            curr_top5 = top5_correct / total_processed
+            
+            # Create intermediate plot
+            inter_fig = plot_metrics(curr_mrr, curr_top1, curr_top5)
+            yield None, inter_fig, None
+            plt.close(inter_fig)
 
     if total_processed == 0:
         raise gr.Error("No valid labeled images found.")
@@ -435,7 +446,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
         "true_labels": true_labels
     }
 
-    return tsne_fig, metrics_fig, results_dict
+    yield tsne_fig, metrics_fig, results_dict
 
 
 def save_evaluation_results(results_dict, output_dir):
