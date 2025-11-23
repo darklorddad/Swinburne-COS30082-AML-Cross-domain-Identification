@@ -282,6 +282,29 @@ def train(config):
 
     logger.info("Finished training, saving model...")
     torch.save(model.state_dict(), f"{config.project_name}/pytorch_model.bin")
+
+    # Is this a problem? Not for inference, provided you know the parameters you used. To load the model later, you simply need to instantiate the class with the same arguments you used for training, and then load the weights:
+    #
+    # # You must manually provide the params used during training
+    # model = ArcFaceClassifier(model_name="microsoft/resnet-18", num_classes=100, ...)
+    # model.load_state_dict(torch.load("path/to/pytorch_model.bin"))
+
+    # Save training arguments (Standard AutoTrain behavior)
+    torch.save(args, f"{config.project_name}/training_args.bin")
+
+    # Save custom config.json (Standard AutoTrain behavior)
+    custom_config = {
+        "architectures": ["ArcFaceClassifier"],
+        "model_type": "custom_arcface",
+        "backbone": config.model,
+        "num_classes": num_classes,
+        "arcface_s": config.arcface_s,
+        "arcface_m": config.arcface_m,
+        "image_size": image_processor.size if image_processor else {"height": 224, "width": 224},
+    }
+    with open(f"{config.project_name}/config.json", "w") as f:
+        json.dump(custom_config, f, indent=4)
+
     if image_processor:
         image_processor.save_pretrained(config.project_name)
 
