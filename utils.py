@@ -85,18 +85,20 @@ def util_plot_training_metrics(json_path):
 def util_save_training_metrics(json_path, save_dir):
     os.makedirs(save_dir, exist_ok=True)
     
-    # 1. Save CSV
+    # 1. Save JSON (Detailed)
     with open(json_path, 'r', encoding='utf-8') as f: data = json.load(f)
-    df = pd.DataFrame(data.get('log_history', []))
-    if df.empty: raise ValueError("No 'log_history' found.")
+    log_history = data.get('log_history', [])
+    if not log_history: raise ValueError("No 'log_history' found.")
     
-    csv_path = os.path.join(save_dir, 'Training-metrics.csv')
-    df.to_csv(csv_path, index=False)
+    # Save the raw log history as a single JSON file
+    json_out_path = os.path.join(save_dir, 'Training-metrics.json')
+    with open(json_out_path, 'w', encoding='utf-8') as f:
+        json.dump(log_history, f, indent=4)
     
     # 2. Generate and Save Plots
     figures = util_plot_training_metrics(json_path)
     
-    saved_count = 1 # CSV
+    saved_count = 1 # JSON
     
     # Mapping keys to Chart Titles used in util_plot_training_metrics
     name_map = {
@@ -132,4 +134,4 @@ def util_save_training_metrics(json_path, save_dir):
             saved_count += 1
             plt.close(fig) # Close figure to free memory
             
-    return f"Successfully saved metrics to {save_dir}\nSaved {saved_count} files (CSV + Plots)."
+    return f"Successfully saved metrics to {save_dir}\nSaved {saved_count} files (JSON + Plots)."

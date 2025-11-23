@@ -205,7 +205,7 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
     return {}
 
 
-def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, test_dir, save_to_disk=False, output_dir=None):
+def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, test_dir):
     if not test_dir or not os.path.exists(test_dir):
         raise gr.Error("Please provide a valid test directory.")
 
@@ -223,17 +223,30 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
         if class_names:
             id2label = {i: name for i, name in enumerate(class_names)}
             label2id = {name: i for i, name in enumerate(class_names)}
-        else:
-            # If no class names provided, we can't match string labels from filenames to IDs easily
-            # unless filenames are just IDs.
-            pass
-
-    # Sort labels by length for matching
-    sorted_labels = sorted(label2id.keys(), key=len, reverse=True)
     
-    image_files = [f for f in os.listdir(test_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-    if not image_files:
-        raise gr.Error("No images found in test directory.")
+    # Scan directory structure for images
+    # Expected structure: test_dir/class_name/image.jpg
+    image_paths = []
+    image_labels = []
+    
+    for root, dirs, files in os.walk(test_dir):
+        if os.path.abspath(root) == os.path.abspath(test_dir):
+            continue # Skip root folder
+            
+        class_name = os.path.basename(root)
+        
+        # Check if class exists in model
+        if class_name not in label2id:
+            # Optional: Log warning or skip
+            continue
+            
+        for f in files:
+            if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+                image_paths.append(os.path.join(root, f))
+                image_labels.append(class_name)
+
+    if not image_paths:
+        raise gr.Error("No valid images found in test directory subfolders matching model classes.")
 
     true_labels = []
     embeddings = []
@@ -247,25 +260,17 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     
     progress = gr.Progress()
     
-    for i, filename in enumerate(progress.tqdm(image_files, desc="Evaluating")):
-        # 1. Identify Ground Truth
-        gt_label = None
-        for label in sorted_labels:
-            if filename.startswith(label + "_"):
-                gt_label = label
-                break
-        
-        if not gt_label: continue # Skip if can't identify
+    for i, img_path in enumerate(progress.tqdm(image_paths, desc="Evaluating")):
+        gt_label = image_labels[i]
         gt_id = label2id[gt_label]
         
-        # 2. Load Image
-        img_path = os.path.join(test_dir, filename)
+        # Load Image
         try:
             image = Image.open(img_path).convert("RGB")
         except Exception:
             continue
 
-        # 3. Inference
+        # Inference
         with torch.no_grad():
             if model_type == "hf":
                 inputs = processor(images=image, return_tensors="pt")
@@ -277,8 +282,6 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
                     last_hidden = outputs.hidden_states[-1][0]
                     if last_hidden.dim() == 2: # ViT [seq, dim]
                         emb = last_hidden.mean(dim=0)
-                        # AM: Use CLS attention if available? Or just skip AM for ViT for now.
-                        # Simple feature map not easily available without reshaping
                         feature_map = None 
                     elif last_hidden.dim() == 3: # CNN [C, H, W]
                         emb = last_hidden.mean(dim=[1, 2])
@@ -293,12 +296,11 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
 
             elif model_type == "timm":
                 input_tensor = processor(image).unsqueeze(0)
-                # Try to get features
                 try:
-                    features = model.forward_features(input_tensor) # [B, C, H, W] or [B, L, C]
+                    features = model.forward_features(input_tensor)
                     if features.dim() == 4: # CNN
                         emb = features.mean(dim=[2, 3])[0]
-                        feature_map = features[0].mean(dim=0) # [H, W]
+                        feature_map = features[0].mean(dim=0)
                     elif features.dim() == 3: # ViT
                         emb = features.mean(dim=1)[0]
                         feature_map = None
@@ -307,16 +309,14 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
                         feature_map = None
                     embeddings.append(emb.numpy())
                     
-                    # Get logits
                     logits = model.forward_head(features) if hasattr(model, 'forward_head') else model(input_tensor)
                     logits = logits[0]
                 except Exception:
-                    # Fallback
                     logits = model(input_tensor)[0]
                     embeddings.append(logits.numpy())
                     feature_map = None
 
-        # 4. Metrics
+        # Metrics
         probs = torch.nn.functional.softmax(logits, dim=0)
         sorted_indices = torch.argsort(probs, descending=True)
         
@@ -325,7 +325,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
             rank = (sorted_indices == gt_id).nonzero(as_tuple=True)[0].item() + 1
             ranks.append(1.0 / rank)
         except Exception:
-            ranks.append(0) # Should not happen if gt_id is valid
+            ranks.append(0)
 
         # Top-1
         if sorted_indices[0] == gt_id:
@@ -338,7 +338,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
         true_labels.append(gt_label)
         total_processed += 1
         
-        # 5. Collect AM sample (limit to 3)
+        # Collect AM sample (limit to 3)
         if feature_map is not None and len(am_images) < 3:
             am_images.append((image, feature_map.cpu().numpy()))
 
@@ -371,12 +371,9 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
         
         for ax, (img, fmap) in zip(axes, am_images):
             ax.imshow(img)
-            # Resize fmap to img size using PIL
             fmap_img = Image.fromarray(fmap)
             fmap_resized = fmap_img.resize((img.width, img.height), resample=Image.BILINEAR)
             fmap_arr = np.array(fmap_resized)
-            
-            # Normalize
             fmap_arr = (fmap_arr - fmap_arr.min()) / (fmap_arr.max() - fmap_arr.min() + 1e-8)
             ax.imshow(fmap_arr, cmap='jet', alpha=0.5)
             ax.axis('off')
@@ -391,14 +388,11 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
         "top1": top1_acc,
         "top5": top5_acc,
         "total": total_processed,
-        "embeddings": embeddings, # List of numpy arrays
+        "embeddings": embeddings, 
         "true_labels": true_labels,
-        "text_report": result_text
+        "text_report": result_text,
+        "am_images": am_images # Pass images for re-saving if needed
     }
-
-    if save_to_disk and output_dir:
-        save_status = save_evaluation_results(results_dict, output_dir)
-        result_text += f"\n\n**Save Status:** {save_status}"
 
     return result_text, tsne_fig, am_fig, results_dict
 
@@ -412,16 +406,26 @@ def save_evaluation_results(results_dict, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     
     try:
-        # Save Text Report
-        with open(os.path.join(output_dir, "evaluation_report.md"), "w", encoding="utf-8") as f:
-            f.write(results_dict.get("text_report", ""))
+        # 1. Save Single JSON with details
+        # Convert numpy arrays in embeddings to lists for JSON serialization
+        embeddings_list = [e.tolist() if isinstance(e, np.ndarray) else e for e in results_dict.get("embeddings", [])]
+        
+        data_to_save = {
+            "mrr": results_dict.get("mrr"),
+            "top1_accuracy": results_dict.get("top1"),
+            "top5_accuracy": results_dict.get("top5"),
+            "total_images": results_dict.get("total"),
+            "text_report": results_dict.get("text_report"),
+            "true_labels": results_dict.get("true_labels"),
+            # Embeddings might be large, but user asked for "as much details as you can"
+            # "embeddings": embeddings_list 
+        }
+        
+        with open(os.path.join(output_dir, "evaluation_results.json"), "w", encoding="utf-8") as f:
+            json.dump(data_to_save, f, indent=4)
             
-        # Save Metrics JSON
-        metrics = {k: v for k, v in results_dict.items() if k not in ["embeddings", "true_labels", "text_report"]}
-        with open(os.path.join(output_dir, "metrics.json"), "w", encoding="utf-8") as f:
-            json.dump(metrics, f, indent=4)
-            
-        # Re-generate and save t-SNE plot
+        # 2. Save Plots as Images
+        # t-SNE
         embeddings = results_dict.get("embeddings")
         true_labels = results_dict.get("true_labels")
         mrr = results_dict.get("mrr")
@@ -431,6 +435,27 @@ def save_evaluation_results(results_dict, output_dir):
             if fig:
                 fig.savefig(os.path.join(output_dir, "tsne_plot.png"))
                 plt.close(fig)
+        
+        # Activation Maps
+        am_images = results_dict.get("am_images")
+        if am_images:
+            import matplotlib.pyplot as plt
+            fig, axes = plt.subplots(1, len(am_images), figsize=(15, 5))
+            if len(am_images) == 1: axes = [axes]
+            
+            for ax, (img, fmap) in zip(axes, am_images):
+                ax.imshow(img)
+                fmap_img = Image.fromarray(fmap)
+                fmap_resized = fmap_img.resize((img.width, img.height), resample=Image.BILINEAR)
+                fmap_arr = np.array(fmap_resized)
+                fmap_arr = (fmap_arr - fmap_arr.min()) / (fmap_arr.max() - fmap_arr.min() + 1e-8)
+                ax.imshow(fmap_arr, cmap='jet', alpha=0.5)
+                ax.axis('off')
+                ax.set_title("Activation Map")
+            
+            plt.tight_layout()
+            fig.savefig(os.path.join(output_dir, "activation_maps.png"))
+            plt.close(fig)
                 
         return f"Successfully saved evaluation results to {output_dir}"
     except Exception as e:
