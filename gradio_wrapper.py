@@ -26,16 +26,6 @@ from utils import (
     util_save_training_metrics
 )
 
-AUTOTRAIN_PROCESS = None
-
-
-def _enqueue_output(stream, queue_obj):
-    """Reads from a stream and puts lines into a queue."""
-    try:
-        for line in iter(stream.readline, ''):
-            queue_obj.put(line)
-    finally:
-        stream.close()
 
 
 def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, input_image) -> dict:
@@ -151,15 +141,9 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, input_ima
 
 
 def launch_autotrain_ui(autotrain_path: str):
-    """Launches the AutoTrain Gradio UI, streams its output, and opens it in a new browser tab."""
+    """Launches the AutoTrain Gradio UI in a separate detached process."""
     if not autotrain_path or not os.path.isdir(autotrain_path):
-        yield "Error: Please provide a valid path to the AutoTrain folder.", gr.update(visible=True), gr.update(visible=False)
-        return
-
-    global AUTOTRAIN_PROCESS
-    if AUTOTRAIN_PROCESS and AUTOTRAIN_PROCESS.poll() is None:
-        yield "AutoTrain UI is already running.", gr.update(interactive=False), gr.update(visible=True)
-        return
+        return "Error: Please provide a valid path to the AutoTrain folder."
 
     module_parent_dir = os.path.dirname(autotrain_path)
     env = os.environ.copy()
@@ -167,135 +151,33 @@ def launch_autotrain_ui(autotrain_path: str):
     command = [sys.executable, os.path.join('launch_autotrain.py')]
     autotrain_url = "http://localhost:7861"
     
-    log_output = "Launching AutoTrain UI...\n"
-    yield log_output, gr.update(interactive=False), gr.update(visible=True)
-
     try:
-        startupinfo = None
+        # Launch as a detached process
         if sys.platform == "win32":
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-
-        popen_kwargs = {
-            "stdout": subprocess.PIPE,
-            "stderr": subprocess.STDOUT,
-            "bufsize": 1,
-            "env": env,
-            "text": True,
-        }
-
-        if sys.platform == "win32":
-            popen_kwargs["startupinfo"] = startupinfo
+            # CREATE_NEW_CONSOLE = 0x00000010
+            subprocess.Popen(command, env=env, creationflags=subprocess.CREATE_NEW_CONSOLE)
         else:
-            popen_kwargs["preexec_fn"] = os.setsid
-
-        AUTOTRAIN_PROCESS = subprocess.Popen(command, **popen_kwargs)
+            # start_new_session=True detaches the process on Unix
+            subprocess.Popen(command, env=env, start_new_session=True)
         
-        output_queue = queue.Queue()
-        reader_thread = threading.Thread(target=_enqueue_output, args=(AUTOTRAIN_PROCESS.stdout, output_queue))
-        reader_thread.daemon = True
-        reader_thread.start()
-        print("Started thread to read AutoTrain output.")
-
+        # Wait and check if it comes alive
         start_time = time.time()
         timeout = 30
-        server_ready = False
         
-        while AUTOTRAIN_PROCESS.poll() is None:
+        while time.time() - start_time < timeout:
             try:
-                while True:
-                    line = output_queue.get_nowait()
-                    print(line, end='')
-                    log_output += line
-                    yield log_output, gr.update(interactive=False), gr.update(visible=True)
-            except queue.Empty:
+                response = requests.get(autotrain_url, timeout=0.5)
+                if response.status_code == 200:
+                    webbrowser.open(autotrain_url)
+                    return f"Success: AutoTrain UI launched in a new window.\nURL: {autotrain_url}"
+            except (requests.ConnectionError, requests.Timeout):
                 pass
-
-            if not server_ready:
-                try:
-                    response = requests.get(autotrain_url, timeout=0.2)
-                    if response.status_code == 200:
-                        server_ready = True
-                        webbrowser.open(autotrain_url)
-                        message = f"\nSuccessfully launched AutoTrain UI. It should now be open at {autotrain_url}."
-                        print(message)
-                        log_output += message
-                        yield log_output, gr.update(interactive=False), gr.update(visible=True)
-                except (requests.ConnectionError, requests.Timeout):
-                    pass
-
-            if not server_ready and time.time() - start_time > timeout:
-                stop_autotrain_ui()
-                message = f"\nAutoTrain UI failed to start within {timeout} seconds. The process has been stopped."
-                print(message)
-                log_output += message
-                yield log_output, gr.update(visible=True), gr.update(visible=False)
-                return
-
-            time.sleep(0.1)
-
-        reader_thread.join(timeout=1)
-        try:
-            while True:
-                line = output_queue.get_nowait()
-                print(line, end='')
-                log_output += line
-        except queue.Empty:
-            pass
-        
-        message = f"\nAutoTrain UI process terminated with exit code {AUTOTRAIN_PROCESS.returncode}."
-        print(message)
-        log_output += message
-        AUTOTRAIN_PROCESS = None
-        yield log_output, gr.update(visible=True), gr.update(visible=False)
+            time.sleep(1)
+            
+        return f"Process launched, but failed to respond at {autotrain_url} within {timeout} seconds.\nPlease check the console window that opened."
 
     except Exception as e:
-        message = f"Failed to launch AutoTrain UI: {e}"
-        print(message)
-        yield message, gr.update(visible=True), gr.update(visible=False)
-
-def stop_autotrain_ui():
-    """Stops the AutoTrain UI process and its children."""
-    global AUTOTRAIN_PROCESS
-    process = AUTOTRAIN_PROCESS
-    if not process or process.poll() is not None:
-        message = "AutoTrain UI process is not running or was already stopped."
-        print(message)
-        AUTOTRAIN_PROCESS = None
-        return message, gr.update(visible=True), gr.update(visible=False)
-
-    try:
-        if sys.platform == "win32":
-            # On Windows, use taskkill to forcefully terminate the process tree.
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-            message = "AutoTrain UI process has been stopped."
-        else:
-            # On Unix-like systems, send SIGTERM to the process group.
-            pgid = os.getpgid(process.pid)
-            os.killpg(pgid, signal.SIGTERM)
-            try:
-                process.wait(timeout=5)
-                message = "AutoTrain UI process has been stopped."
-            except subprocess.TimeoutExpired:
-                os.killpg(pgid, signal.SIGKILL)
-                message = "AutoTrain UI process did not stop gracefully and was killed."
-    except (ProcessLookupError, subprocess.CalledProcessError):
-        # ProcessLookupError: process already died (Unix).
-        # CalledProcessError: taskkill failed, likely because process died (Windows).
-        message = "AutoTrain UI process was already stopped."
-    except Exception as e:
-        message = f"An unexpected error occurred while stopping AutoTrain UI: {e}"
-        print(message)
-        return message, gr.update(visible=False), gr.update(visible=True)
-
-    print(message)
-    AUTOTRAIN_PROCESS = None
-    return message, gr.update(visible=True), gr.update(visible=False)
+        return f"Failed to launch AutoTrain UI: {e}"
 
 def show_model_charts(model_dir):
     """Finds trainer_state.json, returns metric plots, and the model_dir for sync."""

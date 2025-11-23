@@ -2,7 +2,7 @@ import os
 import gradio as gr
 from gradio_wrapper import (
     classify_plant, show_model_charts, get_model_choices, update_model_choices,
-    launch_autotrain_ui, stop_autotrain_ui, generate_manifest,
+    launch_autotrain_ui, generate_manifest,
     split_dataset, check_dataset_balance, check_dataset_splittability,
     clean_dataset_names, save_metrics
 )
@@ -139,20 +139,13 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
     with gr.Tab("Training"):
         train_autotrain_path = gr.Textbox(label="Path to AutoTrain folder")
-        with gr.Row():
-            train_launch_button = gr.Button("Launch AutoTrain UI")
-            train_stop_button = gr.Button("Stop AutoTrain UI", visible=False)
-        train_launch_log = gr.Textbox(label="Status", interactive=False, lines=10)
+        train_launch_button = gr.Button("Launch AutoTrain UI")
+        train_launch_log = gr.Textbox(label="Status", interactive=False, lines=2)
         
         train_launch_button.click(
             fn=launch_autotrain_ui,
             inputs=[train_autotrain_path],
-            outputs=[train_launch_log, train_launch_button, train_stop_button]
-        )
-        train_stop_button.click(
-            fn=stop_autotrain_ui,
-            inputs=[],
-            outputs=[train_launch_log, train_launch_button, train_stop_button]
+            outputs=[train_launch_log]
         )
 
     with gr.Tab("Dataset preparation"):
