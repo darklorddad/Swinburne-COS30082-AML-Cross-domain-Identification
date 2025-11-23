@@ -37,7 +37,7 @@ def plot_tsne(embeddings, true_labels, mrr_score):
     tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42, init='pca', learning_rate='auto')
     tsne_results = tsne.fit_transform(embeddings_np)
     
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(8, 6))
     
     unique_labels = list(set(true_labels))
     cmap = plt.get_cmap('tab10' if len(unique_labels) <= 10 else 'viridis')
