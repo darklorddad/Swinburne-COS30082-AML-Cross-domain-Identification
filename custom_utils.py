@@ -1,5 +1,6 @@
 import os
 import shutil
+import re
 import gradio as gr
 
 def custom_sort_dataset(source_dir, destination_dir, species_list_path, pairs_list_path):
@@ -152,16 +153,19 @@ def rename_test_images_func(test_dir, groundtruth_path, species_list_path):
         class_id = id_to_class[img_id]
         species_name = class_to_species.get(class_id, "Unknown")
         
-        # Sanitize species name for filename
-        safe_species_name = "".join([c if c.isalnum() else "_" for c in species_name])
+        # Sanitize species name for filename (snake_case)
+        s = str(species_name).strip().lower()
+        s = re.sub(r'[\s\-]+', '_', s)
+        s = re.sub(r'[^a-z0-9_]', '', s)
+        safe_species_name = re.sub(r'_+', '_', s).strip('_')
         
-        # Check if already renamed (starts with class_id)
-        if filename.startswith(f"{class_id}_"):
+        # Check if already renamed
+        if filename.startswith(f"{safe_species_name}_"):
              continue
 
         # Construct new filename
-        # Format: {ClassID}_{SpeciesName}_{OriginalName}
-        new_filename = f"{class_id}_{safe_species_name}_{filename}"
+        # Format: {SpeciesName}_{OriginalName}
+        new_filename = f"{safe_species_name}_{filename}"
         
         source_path = os.path.join(test_dir, filename)
         dest_path = os.path.join(test_dir, new_filename)
