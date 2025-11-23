@@ -1,3 +1,4 @@
+import os
 import json
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -80,3 +81,28 @@ def util_plot_training_metrics(json_path):
     ax.set_xlabel('Step'); ax.set_ylabel('Steps / second')
     ax.legend(); ax.grid(True); figures['Eval Steps/sec'] = fig_steps_ps
     return figures
+
+def util_save_training_metrics(json_path, save_dir):
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # 1. Save CSV
+    with open(json_path, 'r', encoding='utf-8') as f: data = json.load(f)
+    df = pd.DataFrame(data.get('log_history', []))
+    if df.empty: raise ValueError("No 'log_history' found.")
+    
+    csv_path = os.path.join(save_dir, 'metrics.csv')
+    df.to_csv(csv_path, index=False)
+    
+    # 2. Generate and Save Plots
+    figures = util_plot_training_metrics(json_path)
+    
+    saved_count = 1 # CSV
+    for name, fig in figures.items():
+        if fig:
+            filename = name.lower().replace(' ', '_').replace('/', '_') + '.png'
+            path = os.path.join(save_dir, filename)
+            fig.savefig(path)
+            saved_count += 1
+            plt.close(fig) # Close figure to free memory
+            
+    return f"Successfully saved metrics to {save_dir}\nSaved {saved_count} files (CSV + Plots)."

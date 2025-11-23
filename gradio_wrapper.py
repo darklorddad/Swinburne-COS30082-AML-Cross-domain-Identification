@@ -22,7 +22,8 @@ import threading
 import re
 
 from utils import (
-    util_plot_training_metrics
+    util_plot_training_metrics,
+    util_save_training_metrics
 )
 
 AUTOTRAIN_PROCESS = None
@@ -330,6 +331,32 @@ def show_model_charts(model_dir):
     except Exception as e:
         print(f"Error generating plots for {json_path}: {e}")
         return (None,) * 11 + (gr.update(visible=False), model_dir)
+
+
+def save_metrics(model_dir, save_dir):
+    if not model_dir:
+        raise gr.Error("Please select a model.")
+    if not save_dir:
+        raise gr.Error("Please provide a save directory.")
+
+    # The model_dir might be a checkpoint. trainer_state.json is usually in the parent.
+    search_dir = model_dir
+    if os.path.basename(search_dir).startswith('checkpoint-'):
+        search_dir = os.path.dirname(search_dir)
+
+    json_path = None
+    for root, _, files in os.walk(search_dir):
+        if 'trainer_state.json' in files:
+            json_path = os.path.join(root, 'trainer_state.json')
+            break
+
+    if not json_path:
+        raise gr.Error(f"trainer_state.json not found in '{search_dir}'")
+
+    try:
+        return util_save_training_metrics(json_path, save_dir)
+    except Exception as e:
+        raise gr.Error(f"Failed to save metrics: {e}")
 
 
 def generate_manifest(directory_path: str, manifest_save_path: str, manifest_type: str):
