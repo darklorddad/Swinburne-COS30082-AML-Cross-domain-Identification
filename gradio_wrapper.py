@@ -154,10 +154,10 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
             
             # Load class names if provided
             class_names = None
-            if pth_classes is not None:
+            if pth_classes and os.path.isfile(pth_classes):
                 try:
-                    if pth_classes.name.lower().endswith('.json'):
-                        with open(pth_classes.name, 'r', encoding='utf-8') as f:
+                    if pth_classes.lower().endswith('.json'):
+                        with open(pth_classes, 'r', encoding='utf-8') as f:
                             data = json.load(f)
                             if isinstance(data, list):
                                 class_names = data
@@ -172,7 +172,7 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
                                     class_names = list(data.values())
                     else:
                         # Assume txt file, one class per line
-                        with open(pth_classes.name, 'r', encoding='utf-8') as f:
+                        with open(pth_classes, 'r', encoding='utf-8') as f:
                             class_names = [line.strip() for line in f if line.strip()]
                 except Exception as e:
                     print(f"Warning: Failed to load class list: {e}")

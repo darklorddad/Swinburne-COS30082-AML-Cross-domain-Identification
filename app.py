@@ -62,7 +62,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                         label="Architecture name (timm)", 
                         placeholder="e.g. resnet50, vit_base_patch16_224"
                     )
-                    inf_pth_classes = gr.File(label="Upload class list (txt/json)", file_types=[".txt", ".json"])
+                    inf_pth_classes = gr.Textbox(label="Class list path (txt/json)")
 
                 inf_input_image = gr.Image(type="pil", label="Upload a plant image")
 
