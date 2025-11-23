@@ -92,9 +92,8 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         metrics_model_path = gr.Dropdown(label="Select model", choices=[], value=None, filterable=False)
         with gr.Column(visible=False) as inf_plots_container:
             with gr.Group():
-                with gr.Row():
-                    metrics_save_dir = gr.Textbox(label="Save Directory", placeholder="e.g. ./metrics_output")
-                    metrics_save_btn = gr.Button("Save Metrics", variant="primary")
+                metrics_save_dir = gr.Textbox(label="Save Directory", placeholder="e.g. ./metrics_output")
+                metrics_save_btn = gr.Button("Save Metrics", variant="primary")
                 metrics_status = gr.Textbox(label="Status", interactive=False, lines=2)
 
                 metrics_save_btn.click(
