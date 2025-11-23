@@ -7,12 +7,10 @@ import os
 import subprocess
 import sys
 import webbrowser
-import signal
 import time
 import shutil
 import requests
 import random
-import zipfile
 import math
 import matplotlib.pyplot as plt
 import re
