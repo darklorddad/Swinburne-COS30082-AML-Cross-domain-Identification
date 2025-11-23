@@ -55,7 +55,8 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                         choices=[], 
                         value=None, 
                         filterable=False,
-                        visible=True
+                        visible=True,
+                        allow_custom_value=True
                     )
                     
                     inf_hf_id = gr.Textbox(
@@ -113,7 +114,8 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                         choices=[], 
                         value=None, 
                         filterable=False,
-                        visible=True
+                        visible=True,
+                        allow_custom_value=True
                     )
                     eval_hf_id = gr.Textbox(
                         label="Hugging Face model ID", 
@@ -198,7 +200,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         )
 
     with gr.Tab("Training metrics"):
-        metrics_model_path = gr.Dropdown(label="Select model", choices=[], value=None, filterable=False)
+        metrics_model_path = gr.Dropdown(label="Select model", choices=[], value=None, filterable=False, allow_custom_value=True)
         with gr.Column(visible=False) as inf_plots_container:
             with gr.Accordion("Save metrics", open=False):
                 with gr.Column():
