@@ -131,7 +131,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                         )
 
         # 2. Test Set & Run
-        with gr.Column(visible=False) as eval_run_container:
+        with gr.Column(visible=True) as eval_run_container:
             with gr.Accordion("Evaluation Settings", open=True):
                 eval_test_dir = gr.Textbox(label="Path to test set", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set"))
                 eval_button = gr.Button("Run evaluation", variant="primary")
@@ -153,35 +153,22 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 eval_plot_metrics = gr.Plot(label="Metrics")
 
         # Logic
-        def update_eval_inputs(source, local_path, hf_id, pth_file):
+        def update_eval_inputs(source):
             is_local = (source == "Local")
             is_hf = (source == "Hugging Face Hub")
             is_pth = (source == "Local .pth")
             
-            show_run = False
-            if is_local and local_path: show_run = True
-            if is_hf and hf_id: show_run = True
-            if is_pth and pth_file: show_run = True
-
             return (
                 gr.update(visible=is_local),
                 gr.update(visible=is_hf),
-                gr.update(visible=is_pth),
-                gr.update(visible=show_run)
+                gr.update(visible=is_pth)
             )
 
         eval_source.change(
             fn=update_eval_inputs,
-            inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file],
-            outputs=[eval_model_path, eval_hf_id, eval_pth_group, eval_run_container]
+            inputs=[eval_source],
+            outputs=[eval_model_path, eval_hf_id, eval_pth_group]
         )
-
-        def check_model_selected(value):
-            return gr.update(visible=bool(value))
-
-        eval_model_path.change(fn=check_model_selected, inputs=[eval_model_path], outputs=[eval_run_container])
-        eval_hf_id.change(fn=check_model_selected, inputs=[eval_hf_id], outputs=[eval_run_container])
-        eval_pth_file.change(fn=check_model_selected, inputs=[eval_pth_file], outputs=[eval_run_container])
 
         eval_button.click(
             fn=lambda: (gr.update(visible=True), gr.update(visible=True)),
