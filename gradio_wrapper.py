@@ -243,7 +243,7 @@ def plot_metrics(mrr, top1, top5):
     return fig
 
 
-def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, test_dir):
+def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, test_dir, batch_size=32):
     if not test_dir or not os.path.exists(test_dir):
         raise gr.Error("Please provide a valid test directory.")
 
@@ -341,7 +341,6 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     model.to(device)
     model.eval()
 
-    batch_size = 32
     progress = gr.Progress()
     
     try:
