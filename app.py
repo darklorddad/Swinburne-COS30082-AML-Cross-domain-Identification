@@ -61,16 +61,14 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                     
                     inf_hf_id = gr.Textbox(
                         label="Hugging Face model ID", 
-                        placeholder="e.g. microsoft/resnet-50", 
                         visible=False
                     )
                     
                     with gr.Column(visible=False) as inf_pth_group:
-                        inf_pth_file = gr.Textbox(label="Path to .pth file", placeholder="C:/path/to/model.pth")
-                        inf_pth_classes = gr.Textbox(label="Path to class list (txt/json)", placeholder="C:/path/to/classes.txt")
+                        inf_pth_file = gr.Textbox(label="Path to .pth file")
+                        inf_pth_classes = gr.Textbox(label="Path to class list (txt/json)")
                         inf_pth_arch = gr.Textbox(
-                            label="Architecture name (timm)", 
-                            placeholder="e.g. resnet50, vit_base_patch16_224"
+                            label="Architecture name (timm)"
                         )
 
                 inf_input_image = gr.Image(type="pil", label="Upload a plant image")
@@ -119,20 +117,18 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                     )
                     eval_hf_id = gr.Textbox(
                         label="Hugging Face model ID", 
-                        placeholder="e.g. microsoft/resnet-50", 
                         visible=False
                     )
                     with gr.Column(visible=False) as eval_pth_group:
-                        eval_pth_file = gr.Textbox(label="Path to .pth file", placeholder="C:/path/to/model.pth")
-                        eval_pth_classes = gr.Textbox(label="Path to class list (txt/json)", placeholder="C:/path/to/classes.txt")
+                        eval_pth_file = gr.Textbox(label="Path to .pth file")
+                        eval_pth_classes = gr.Textbox(label="Path to class list (txt/json)")
                         eval_pth_arch = gr.Textbox(
-                            label="Architecture name (timm)", 
-                            placeholder="e.g. resnet50, vit_base_patch16_224"
+                            label="Architecture name (timm)"
                         )
 
         # 2. Test Set & Run
         with gr.Column(visible=True) as eval_run_container:
-            with gr.Accordion("Evaluation Settings", open=True):
+            with gr.Accordion("Settings", open=True):
                 eval_test_dir = gr.Textbox(label="Path to test set", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set"))
                 eval_button = gr.Button("Run evaluation", variant="primary")
 
@@ -140,7 +136,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         with gr.Column(visible=False) as eval_save_container:
             with gr.Accordion("Save evaluation", open=False):
                 with gr.Column():
-                    eval_export_dir = gr.Textbox(label="Export Directory", value="Evaluation_Results")
+                    eval_export_dir = gr.Textbox(label="Export Directory")
                     eval_export_btn = gr.Button("Save", variant="primary")
                     eval_export_status = gr.Textbox(label="Status", interactive=False)
 
@@ -417,10 +413,10 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
     with gr.Tab("Custom", visible=CUSTOM_UTILS_AVAILABLE):
         with gr.Accordion("Sort Test Dataset (PlantCLEF)", open=False):
             with gr.Column():
-                std_test_dir = gr.Textbox(label="Test Directory (Flat images)", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Test"))
-                std_dest_dir = gr.Textbox(label="Destination Directory (Class folders)", value="Sorted_Test_Set")
-                std_groundtruth_path = gr.Textbox(label="Groundtruth File Path", value=os.path.join("AML-dataset", "AML_project_herbarium_dataset", "list", "groundtruth.txt"))
-                std_species_list_path = gr.Textbox(label="Species List Path", value=os.path.join("AML-dataset", "AML_project_herbarium_dataset", "list", "species_list.txt"))
+                std_test_dir = gr.Textbox(label="Test Directory (Flat images)")
+                std_dest_dir = gr.Textbox(label="Destination Directory (Class folders)")
+                std_groundtruth_path = gr.Textbox(label="Groundtruth File Path")
+                std_species_list_path = gr.Textbox(label="Species List Path")
                 std_button = gr.Button("Sort Test Set", variant="primary")
                 std_status = gr.Textbox(label="Status", interactive=False, lines=5)
             
@@ -447,9 +443,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
         with gr.Accordion("Rename Test Images (PlantCLEF)", open=False):
             with gr.Column():
-                rti_test_dir = gr.Textbox(label="Test Directory", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set"))
-                rti_groundtruth_path = gr.Textbox(label="Groundtruth File Path", value=os.path.join("AML-dataset", "AML_project_herbarium_dataset", "list", "groundtruth.txt"))
-                rti_species_list_path = gr.Textbox(label="Species List Path", value=os.path.join("AML-dataset", "AML_project_herbarium_dataset", "list", "species_list.txt"))
+                rti_test_dir = gr.Textbox(label="Test Directory")
+                rti_groundtruth_path = gr.Textbox(label="Groundtruth File Path")
+                rti_species_list_path = gr.Textbox(label="Species List Path")
                 rti_button = gr.Button("Rename Images", variant="primary")
                 rti_status = gr.Textbox(label="Status", interactive=False, lines=5)
             
