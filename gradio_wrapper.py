@@ -205,7 +205,7 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
     return {}
 
 
-def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, test_dir):
+def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, test_dir, save_to_disk=False, output_dir=None):
     if not test_dir or not os.path.exists(test_dir):
         raise gr.Error("Please provide a valid test directory.")
 
@@ -395,6 +395,10 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
         "true_labels": true_labels,
         "text_report": result_text
     }
+
+    if save_to_disk and output_dir:
+        save_status = save_evaluation_results(results_dict, output_dir)
+        result_text += f"\n\n**Save Status:** {save_status}"
 
     return result_text, tsne_fig, am_fig, results_dict
 

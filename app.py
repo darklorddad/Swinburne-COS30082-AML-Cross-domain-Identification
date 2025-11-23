@@ -130,19 +130,19 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
         # 2. Test Set & Run
         with gr.Column(visible=False) as eval_run_container:
-            eval_test_dir = gr.Textbox(label="Test Directory (with renamed images)", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Test"))
-            eval_button = gr.Button("Run Evaluation", variant="primary")
+            with gr.Accordion("Evaluation Settings", open=True):
+                eval_test_dir = gr.Textbox(label="Test Directory (with renamed images)", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Test"))
+                
+                with gr.Row():
+                    eval_save_check = gr.Checkbox(label="Save results to disk", value=False)
+                    eval_export_dir = gr.Textbox(label="Export Directory", value="Evaluation_Results", visible=False)
+                
+                eval_button = gr.Button("Run Evaluation", variant="primary")
 
-        # 3. Results & Export (Hidden until run)
+        # 3. Results (Hidden until run)
         eval_results_state = gr.State()
         
         with gr.Column(visible=False) as eval_results_container:
-            with gr.Accordion("Export Results", open=False):
-                with gr.Row():
-                    eval_export_dir = gr.Textbox(label="Export Directory", value="Evaluation_Results")
-                    eval_export_btn = gr.Button("Export")
-                eval_export_status = gr.Textbox(label="Status", interactive=False)
-
             eval_output_text = gr.Markdown(label="Results")
             with gr.Row():
                 eval_plot_tsne = gr.Plot(label="t-SNE Visualization")
@@ -179,19 +179,19 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         eval_hf_id.change(fn=check_model_selected, inputs=[eval_hf_id], outputs=[eval_run_container])
         eval_pth_file.change(fn=check_model_selected, inputs=[eval_pth_file], outputs=[eval_run_container])
 
+        eval_save_check.change(
+            fn=lambda x: gr.update(visible=x),
+            inputs=[eval_save_check],
+            outputs=[eval_export_dir]
+        )
+
         eval_button.click(
             fn=evaluate_test_set,
-            inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file, eval_pth_arch, eval_pth_classes, eval_test_dir],
+            inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file, eval_pth_arch, eval_pth_classes, eval_test_dir, eval_save_check, eval_export_dir],
             outputs=[eval_output_text, eval_plot_tsne, eval_plot_am, eval_results_state]
         ).then(
             fn=lambda: gr.update(visible=True),
             outputs=[eval_results_container]
-        )
-        
-        eval_export_btn.click(
-            fn=save_evaluation_results,
-            inputs=[eval_results_state, eval_export_dir],
-            outputs=[eval_export_status]
         )
 
     with gr.Tab("Training metrics"):
