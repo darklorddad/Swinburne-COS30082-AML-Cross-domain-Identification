@@ -94,7 +94,7 @@ def launch_autotrain_ui(autotrain_path: str):
     module_parent_dir = os.path.dirname(autotrain_path)
     env = os.environ.copy()
     env['PYTHONPATH'] = f"{module_parent_dir}{os.pathsep}{env.get('PYTHONPATH', '')}"
-    command = [sys.executable, os.path.join('core', 'launch_autotrain.py')]
+    command = [sys.executable, os.path.join('launch_autotrain.py')]
     autotrain_url = "http://localhost:7861"
     
     log_output = "Launching AutoTrain UI...\n"
