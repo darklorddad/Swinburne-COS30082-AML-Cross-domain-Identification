@@ -1,6 +1,7 @@
 import gradio as gr
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 import torch
+import numpy as np
 from PIL import Image
 import os
 import subprocess
@@ -24,15 +25,20 @@ from utils import (
     util_save_training_metrics
 )
 
+# Try to import custom_utils for plotting
+try:
+    from custom_utils import plot_tsne
+except ImportError:
+    def plot_tsne(*args, **kwargs): return None
 
 
-def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, input_image) -> dict:
-    if input_image is None:
-        raise gr.Error("Please upload an image.")
-
+def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes):
+    """Helper to load models from various sources."""
     model = None
-    image_processor = None
-    
+    processor = None
+    model_type = "hf" # or "timm"
+    extra_data = {} # e.g. class_names for timm
+
     # --- CASE 1: Local or Hugging Face Hub ---
     if source_type in ["Local", "Hugging Face Hub"]:
         model_id = local_path if source_type == "Local" else hf_id
@@ -65,7 +71,7 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
             
             # Load
             try:
-                image_processor = AutoImageProcessor.from_pretrained(model_id, local_files_only=True)
+                processor = AutoImageProcessor.from_pretrained(model_id, local_files_only=True)
                 model = AutoModelForImageClassification.from_pretrained(checkpoint_dir, local_files_only=True)
             except Exception as e:
                 raise gr.Error(f"Error loading local model: {e}")
@@ -73,20 +79,14 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
         else: 
             # Handle Hugging Face Hub
             try:
-                image_processor = AutoImageProcessor.from_pretrained(model_id)
+                processor = AutoImageProcessor.from_pretrained(model_id)
                 model = AutoModelForImageClassification.from_pretrained(model_id)
             except Exception as e:
                 raise gr.Error(f"Error loading from Hub: {e}")
 
-        # Inference for Transformers models
-        inputs = image_processor(images=input_image, return_tensors="pt")
-        with torch.no_grad(): outputs = model(**inputs)
-        probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)[0]
-        top5_prob, top5_indices = torch.topk(probabilities, 5)
-        return {model.config.id2label[i.item()]: p.item() for i, p in zip(top5_indices, top5_prob)}
-
     # --- CASE 2: Local .pth File (timm) ---
     elif source_type == "Local .pth":
+        model_type = "timm"
         if not pth_file:
             raise gr.Error("Please upload a .pth file.")
         if not pth_arch:
@@ -98,98 +98,270 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
             raise gr.Error("timm is required to load .pth files. Please install it via 'pip install timm'.")
 
         try:
-            # 1. Load Weights first to inspect shape
+            # 1. Load Weights
             state_dict = torch.load(pth_file.name, map_location=torch.device('cpu'))
-            
-            # Handle cases where state_dict might be wrapped
-            if 'state_dict' in state_dict:
-                state_dict = state_dict['state_dict']
-            elif 'model' in state_dict:
-                state_dict = state_dict['model']
+            if 'state_dict' in state_dict: state_dict = state_dict['state_dict']
+            elif 'model' in state_dict: state_dict = state_dict['model']
 
-            # 2. Infer num_classes from the weights
+            # 2. Infer num_classes
             num_classes = None
-            # Common head names in timm models
             for key in ['head.weight', 'fc.weight', 'classifier.weight']:
                 if key in state_dict:
                     num_classes = state_dict[key].shape[0]
                     break
 
-            # 3. Create Model Skeleton
-            # Attempt to clean the architecture name if the user pasted a HF ID (e.g. timm/resnet50)
-            clean_arch = pth_arch
-            if pth_arch.startswith("timm/"):
-                clean_arch = pth_arch.replace("timm/", "")
-
+            # 3. Create Model
+            clean_arch = pth_arch.replace("timm/", "") if pth_arch.startswith("timm/") else pth_arch
+            kwargs = {'pretrained': False}
+            if num_classes is not None: kwargs['num_classes'] = num_classes
+            
             try:
-                kwargs = {'pretrained': False}
-                if num_classes is not None:
-                    kwargs['num_classes'] = num_classes
                 model = timm.create_model(clean_arch, **kwargs)
             except Exception:
-                # If cleaning didn't help, try the original input
-                kwargs = {'pretrained': False}
-                if num_classes is not None:
-                    kwargs['num_classes'] = num_classes
                 model = timm.create_model(pth_arch, **kwargs)
                 
             model.load_state_dict(state_dict)
             model.eval()
 
-            # 3. Preprocessing using timm's data config
+            # 3. Preprocessing
             config = timm.data.resolve_data_config({}, model=model)
-            transform = timm.data.create_transform(**config)
+            processor = timm.data.create_transform(**config)
             
-            input_tensor = transform(input_image).unsqueeze(0)
-
-            # 4. Inference
-            with torch.no_grad():
-                output = model(input_tensor)
-            
-            probabilities = torch.nn.functional.softmax(output[0], dim=0)
-            top5_prob, top5_indices = torch.topk(probabilities, 5)
-            
-            # Load class names if provided
+            # Load class names
             class_names = None
             if pth_classes is not None:
                 try:
                     if pth_classes.name.lower().endswith('.json'):
                         with open(pth_classes.name, 'r', encoding='utf-8') as f:
                             data = json.load(f)
-                            if isinstance(data, list):
-                                class_names = data
+                            if isinstance(data, list): class_names = data
                             elif isinstance(data, dict):
-                                # Assume id2label dict (str(int) -> label)
-                                try:
-                                    # Sort by integer key
-                                    sorted_items = sorted(data.items(), key=lambda x: int(x[0]))
-                                    class_names = [v for k, v in sorted_items]
-                                except ValueError:
-                                    # Fallback: just values
-                                    class_names = list(data.values())
+                                sorted_items = sorted(data.items(), key=lambda x: int(x[0]))
+                                class_names = [v for k, v in sorted_items]
                     else:
-                        # Assume txt file, one class per line
                         with open(pth_classes.name, 'r', encoding='utf-8') as f:
                             class_names = [line.strip() for line in f if line.strip()]
                 except Exception as e:
                     print(f"Warning: Failed to load class list: {e}")
-
-            # Map indices to labels
-            results = {}
-            for i, p in zip(top5_indices, top5_prob):
-                idx = i.item()
-                if class_names and idx < len(class_names):
-                    label = class_names[idx]
-                else:
-                    label = f"Class {idx}"
-                results[label] = p.item()
-            
-            return results
+            extra_data['class_names'] = class_names
 
         except Exception as e:
             raise gr.Error(f"Failed to load .pth file: {e}")
 
+    return model, processor, model_type, extra_data
+
+
+def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, input_image) -> dict:
+    if input_image is None:
+        raise gr.Error("Please upload an image.")
+
+    model, processor, model_type, extra_data = load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes)
+
+    if model_type == "hf":
+        inputs = processor(images=input_image, return_tensors="pt")
+        with torch.no_grad(): outputs = model(**inputs)
+        probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)[0]
+        top5_prob, top5_indices = torch.topk(probabilities, 5)
+        return {model.config.id2label[i.item()]: p.item() for i, p in zip(top5_indices, top5_prob)}
+    
+    elif model_type == "timm":
+        input_tensor = processor(input_image).unsqueeze(0)
+        with torch.no_grad(): output = model(input_tensor)
+        probabilities = torch.nn.functional.softmax(output[0], dim=0)
+        top5_prob, top5_indices = torch.topk(probabilities, 5)
+        
+        class_names = extra_data.get('class_names')
+        results = {}
+        for i, p in zip(top5_indices, top5_prob):
+            idx = i.item()
+            label = class_names[idx] if class_names and idx < len(class_names) else f"Class {idx}"
+            results[label] = p.item()
+        return results
+
     return {}
+
+
+def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, test_dir):
+    if not test_dir or not os.path.exists(test_dir):
+        raise gr.Error("Please provide a valid test directory.")
+
+    model, processor, model_type, extra_data = load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes)
+    
+    # Prepare labels mapping
+    id2label = {}
+    label2id = {}
+    
+    if model_type == "hf":
+        id2label = model.config.id2label
+        label2id = {v: k for k, v in id2label.items()}
+    elif model_type == "timm":
+        class_names = extra_data.get('class_names')
+        if class_names:
+            id2label = {i: name for i, name in enumerate(class_names)}
+            label2id = {name: i for i, name in enumerate(class_names)}
+        else:
+            # If no class names provided, we can't match string labels from filenames to IDs easily
+            # unless filenames are just IDs.
+            pass
+
+    # Sort labels by length for matching
+    sorted_labels = sorted(label2id.keys(), key=len, reverse=True)
+    
+    image_files = [f for f in os.listdir(test_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    if not image_files:
+        raise gr.Error("No images found in test directory.")
+
+    true_labels = []
+    embeddings = []
+    ranks = []
+    top1_correct = 0
+    top5_correct = 0
+    total_processed = 0
+    
+    # For Activation Maps (Feature Maps)
+    am_images = [] # List of (original_image, heatmap)
+    
+    progress = gr.Progress()
+    
+    for i, filename in enumerate(progress.tqdm(image_files, desc="Evaluating")):
+        # 1. Identify Ground Truth
+        gt_label = None
+        for label in sorted_labels:
+            if filename.startswith(label + "_"):
+                gt_label = label
+                break
+        
+        if not gt_label: continue # Skip if can't identify
+        gt_id = label2id[gt_label]
+        
+        # 2. Load Image
+        img_path = os.path.join(test_dir, filename)
+        try:
+            image = Image.open(img_path).convert("RGB")
+        except Exception:
+            continue
+
+        # 3. Inference
+        with torch.no_grad():
+            if model_type == "hf":
+                inputs = processor(images=image, return_tensors="pt")
+                outputs = model(**inputs, output_hidden_states=True)
+                logits = outputs.logits[0]
+                
+                # Embeddings
+                if outputs.hidden_states:
+                    last_hidden = outputs.hidden_states[-1][0]
+                    if last_hidden.dim() == 2: # ViT [seq, dim]
+                        emb = last_hidden.mean(dim=0)
+                        # AM: Use CLS attention if available? Or just skip AM for ViT for now.
+                        # Simple feature map not easily available without reshaping
+                        feature_map = None 
+                    elif last_hidden.dim() == 3: # CNN [C, H, W]
+                        emb = last_hidden.mean(dim=[1, 2])
+                        feature_map = last_hidden.mean(dim=0) # [H, W]
+                    else:
+                        emb = last_hidden
+                        feature_map = None
+                    embeddings.append(emb.numpy())
+                else:
+                    embeddings.append(logits.numpy())
+                    feature_map = None
+
+            elif model_type == "timm":
+                input_tensor = processor(image).unsqueeze(0)
+                # Try to get features
+                try:
+                    features = model.forward_features(input_tensor) # [B, C, H, W] or [B, L, C]
+                    if features.dim() == 4: # CNN
+                        emb = features.mean(dim=[2, 3])[0]
+                        feature_map = features[0].mean(dim=0) # [H, W]
+                    elif features.dim() == 3: # ViT
+                        emb = features.mean(dim=1)[0]
+                        feature_map = None
+                    else:
+                        emb = features[0]
+                        feature_map = None
+                    embeddings.append(emb.numpy())
+                    
+                    # Get logits
+                    logits = model.forward_head(features) if hasattr(model, 'forward_head') else model(input_tensor)
+                    logits = logits[0]
+                except Exception:
+                    # Fallback
+                    logits = model(input_tensor)[0]
+                    embeddings.append(logits.numpy())
+                    feature_map = None
+
+        # 4. Metrics
+        probs = torch.nn.functional.softmax(logits, dim=0)
+        sorted_indices = torch.argsort(probs, descending=True)
+        
+        # Rank (MRR)
+        try:
+            rank = (sorted_indices == gt_id).nonzero(as_tuple=True)[0].item() + 1
+            ranks.append(1.0 / rank)
+        except Exception:
+            ranks.append(0) # Should not happen if gt_id is valid
+
+        # Top-1
+        if sorted_indices[0] == gt_id:
+            top1_correct += 1
+            
+        # Top-5
+        if gt_id in sorted_indices[:5]:
+            top5_correct += 1
+            
+        true_labels.append(gt_label)
+        total_processed += 1
+        
+        # 5. Collect AM sample (limit to 3)
+        if feature_map is not None and len(am_images) < 3:
+            am_images.append((image, feature_map.cpu().numpy()))
+
+    if total_processed == 0:
+        return "No valid labeled images found.", None, None
+
+    # Calculate final metrics
+    mrr = np.mean(ranks)
+    top1_acc = top1_correct / total_processed
+    top5_acc = top5_correct / total_processed
+    
+    result_text = (
+        f"## Evaluation Results\n"
+        f"**Processed Images:** {total_processed}\n\n"
+        f"### Quantitative Metrics\n"
+        f"- **Mean Reciprocal Rank (MRR):** {mrr:.4f}\n"
+        f"- **Top-1 Accuracy:** {top1_acc:.2%}\n"
+        f"- **Top-5 Accuracy:** {top5_acc:.2%}\n"
+    )
+
+    # Generate t-SNE Plot
+    tsne_fig = plot_tsne(embeddings, true_labels, mrr)
+    
+    # Generate AM Plot
+    am_fig = None
+    if am_images:
+        import matplotlib.pyplot as plt
+        fig, axes = plt.subplots(1, len(am_images), figsize=(15, 5))
+        if len(am_images) == 1: axes = [axes]
+        
+        for ax, (img, fmap) in zip(axes, am_images):
+            ax.imshow(img)
+            # Resize fmap to img size using PIL
+            fmap_img = Image.fromarray(fmap)
+            fmap_resized = fmap_img.resize((img.width, img.height), resample=Image.BILINEAR)
+            fmap_arr = np.array(fmap_resized)
+            
+            # Normalize
+            fmap_arr = (fmap_arr - fmap_arr.min()) / (fmap_arr.max() - fmap_arr.min() + 1e-8)
+            ax.imshow(fmap_arr, cmap='jet', alpha=0.5)
+            ax.axis('off')
+            ax.set_title("Activation Map (Avg Channels)")
+        
+        plt.tight_layout()
+        am_fig = fig
+
+    return result_text, tsne_fig, am_fig
 
 
 def launch_tensorboard(log_dir: str, venv_parent_dir: str):

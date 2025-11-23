@@ -163,6 +163,35 @@ def evaluate_model(model_path, test_dir):
     
     return result_text, fig
 
+def plot_tsne(embeddings, true_labels, mrr_score):
+    if len(embeddings) < 2:
+        return None
+        
+    embeddings_np = np.array(embeddings)
+    n_samples = embeddings_np.shape[0]
+    perplexity = min(30, n_samples - 1)
+    
+    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42, init='pca', learning_rate='auto')
+    tsne_results = tsne.fit_transform(embeddings_np)
+    
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    unique_labels = list(set(true_labels))
+    cmap = plt.get_cmap('tab10' if len(unique_labels) <= 10 else 'viridis')
+    
+    for i, label in enumerate(unique_labels):
+        indices = [j for j, l in enumerate(true_labels) if l == label]
+        points = tsne_results[indices]
+        color = cmap(i / len(unique_labels))
+        ax.scatter(points[:, 0], points[:, 1], label=label, color=color, s=60, alpha=0.8)
+    
+    ax.set_title(f"t-SNE Visualization (MRR: {mrr_score:.4f})")
+    if len(unique_labels) <= 20:
+        ax.legend()
+    
+    plt.tight_layout()
+    return fig
+
 def evaluate_dataset(model_path, dataset_dir):
     if not model_path:
         raise gr.Error("Please select a model.")
