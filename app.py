@@ -6,7 +6,15 @@ from gradio_wrapper import (
     split_dataset, check_dataset_balance, check_dataset_splittability,
     clean_dataset_names, save_metrics
 )
-from custom_utils import custom_sort_dataset, rename_test_images_func, evaluate_model, evaluate_dataset
+try:
+    from custom_utils import custom_sort_dataset, rename_test_images_func, evaluate_model, evaluate_dataset
+    CUSTOM_UTILS_AVAILABLE = True
+except ImportError:
+    CUSTOM_UTILS_AVAILABLE = False
+    def custom_sort_dataset(*args, **kwargs): raise gr.Error("custom_utils not available")
+    def rename_test_images_func(*args, **kwargs): raise gr.Error("custom_utils not available")
+    def evaluate_model(*args, **kwargs): raise gr.Error("custom_utils not available")
+    def evaluate_dataset(*args, **kwargs): raise gr.Error("custom_utils not available")
 
 DEFAULT_MANIFEST_PATH = os.path.join('core', 'manifest.md').replace(os.sep, '/')
 
@@ -318,7 +326,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 outputs=[dp_status_message]
             )
 
-    with gr.Tab("Evaluation"):
+    with gr.Tab("Evaluation", visible=CUSTOM_UTILS_AVAILABLE):
         with gr.Accordion("Evaluation (Test Set - MRR & t-SNE)", open=False):
             with gr.Column():
                 eval_model_path = gr.Dropdown(label="Select Model", choices=[], value=None)
@@ -347,7 +355,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 outputs=[eval_ds_output_text, eval_ds_plot]
             )
 
-    with gr.Tab("Custom"):
+    with gr.Tab("Custom", visible=CUSTOM_UTILS_AVAILABLE):
         with gr.Accordion("Sort Dataset (PlantCLEF)", open=False):
             with gr.Column():
                 cust_source_dir = gr.Textbox(label="Source directory")
