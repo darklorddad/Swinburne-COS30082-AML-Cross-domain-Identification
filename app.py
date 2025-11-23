@@ -3,9 +3,10 @@ import gradio as gr
 from gradio_wrapper import (
     classify_plant, show_model_charts, get_model_choices, update_model_choices,
     launch_autotrain_ui, stop_autotrain_ui, generate_manifest,
-    split_dataset, check_dataset_balance, check_dataset_splittability, custom_sort_dataset,
+    split_dataset, check_dataset_balance, check_dataset_splittability,
     clean_dataset_names
 )
+from custom_utils import custom_sort_dataset, rename_test_images_func
 
 DEFAULT_MANIFEST_PATH = os.path.join('core', 'manifest.md').replace(os.sep, '/')
 
@@ -255,19 +256,34 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             )
 
     with gr.Tab("Custom"):
-        with gr.Column():
-            cust_source_dir = gr.Textbox(label="Source directory")
-            cust_destination_dir = gr.Textbox(label="Destination directory")
-            cust_species_list_path = gr.Textbox(label="Species List Path (ID;Name format)")
-            cust_pairs_list_path = gr.Textbox(label="Pairs List Path (Optional, list of IDs)")
-            cust_sort_button = gr.Button("Sort Dataset", variant="primary")
-            cust_status_message = gr.Textbox(label="Status", interactive=False, lines=5)
+        with gr.Accordion("Sort Dataset (PlantCLEF)", open=False):
+            with gr.Column():
+                cust_source_dir = gr.Textbox(label="Source directory")
+                cust_destination_dir = gr.Textbox(label="Destination directory")
+                cust_species_list_path = gr.Textbox(label="Species List Path (ID;Name format)")
+                cust_pairs_list_path = gr.Textbox(label="Pairs List Path (Optional, list of IDs)")
+                cust_sort_button = gr.Button("Sort Dataset", variant="primary")
+                cust_status_message = gr.Textbox(label="Status", interactive=False, lines=5)
 
-        cust_sort_button.click(
-            fn=custom_sort_dataset,
-            inputs=[cust_source_dir, cust_destination_dir, cust_species_list_path, cust_pairs_list_path],
-            outputs=[cust_status_message]
-        )
+            cust_sort_button.click(
+                fn=custom_sort_dataset,
+                inputs=[cust_source_dir, cust_destination_dir, cust_species_list_path, cust_pairs_list_path],
+                outputs=[cust_status_message]
+            )
+
+        with gr.Accordion("Rename Test Images (PlantCLEF)", open=False):
+            with gr.Column():
+                rti_test_dir = gr.Textbox(label="Test Directory", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Test"))
+                rti_groundtruth_path = gr.Textbox(label="Groundtruth File Path", value=os.path.join("AML-dataset", "AML_project_herbarium_dataset", "list", "groundtruth.txt"))
+                rti_species_list_path = gr.Textbox(label="Species List Path", value=os.path.join("AML-dataset", "AML_project_herbarium_dataset", "list", "species_list.txt"))
+                rti_button = gr.Button("Rename Images", variant="primary")
+                rti_status = gr.Textbox(label="Status", interactive=False, lines=5)
+            
+            rti_button.click(
+                fn=rename_test_images_func,
+                inputs=[rti_test_dir, rti_groundtruth_path, rti_species_list_path],
+                outputs=[rti_status]
+            )
 
     refresh_button.click(
         fn=update_model_choices,
