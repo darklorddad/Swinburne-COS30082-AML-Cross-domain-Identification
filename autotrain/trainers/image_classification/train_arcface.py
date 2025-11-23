@@ -144,7 +144,7 @@ def train(config):
         arcface_args={
             "s": config.arcface_s,
             "m": config.arcface_m,
-            "sub_centers": config.sub_centers,
+            "sub_centers": max(1, config.sub_centers),
         },
     )
 
@@ -171,6 +171,7 @@ def train(config):
         gradient_accumulation_steps=config.gradient_accumulation,
         fp16=config.mixed_precision == "fp16",
         bf16=config.mixed_precision == "bf16",
+        load_best_model_at_end=True if valid_data else False,
     )
 
     args = TrainingArguments(**training_args)
