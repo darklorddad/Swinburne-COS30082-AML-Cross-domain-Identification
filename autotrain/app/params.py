@@ -196,7 +196,7 @@ class AppParams:
             return self._munge_params_text_clf()
         elif self.task == "seq2seq":
             return self._munge_params_seq2seq()
-        elif self.task == "image-classification":
+        elif self.task.startswith("image-classification"):
             return self._munge_params_img_clf()
         elif self.task == "image-object-detection":
             return self._munge_params_img_obj_det()
