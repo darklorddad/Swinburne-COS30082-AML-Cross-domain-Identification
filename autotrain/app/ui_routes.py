@@ -320,6 +320,15 @@ UI_PARAMS = {
         "type": "number",
         "label": "Head LR",
     },
+    "use_class_balanced_sampler": {
+        "type": "dropdown",
+        "label": "Class Balanced Sampler",
+        "options": [True, False],
+    },
+    "cutout_prob": {
+        "type": "number",
+        "label": "Cutout Prob",
+    },
 }
 
 

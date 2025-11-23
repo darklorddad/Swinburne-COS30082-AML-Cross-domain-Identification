@@ -262,6 +262,7 @@ def process_data(train_data, valid_data, image_processor, config, model=None):
                 p=config.augment_prob,
             ),
             A.ToGray(p=config.grayscale_prob),
+            A.CoarseDropout(max_holes=8, max_height=height // 8, max_width=width // 8, fill_value=0, p=config.cutout_prob),
             A.Normalize(mean=mean, std=std),
         ]
     )

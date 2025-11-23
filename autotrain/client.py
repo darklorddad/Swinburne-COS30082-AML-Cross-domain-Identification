@@ -65,6 +65,8 @@ PARAMS["image-classification-custom"] = {
     "arcface_s": 30.0,
     "arcface_m": 0.5,
     "warmup_epochs": 5,
+    "use_class_balanced_sampler": False,
+    "cutout_prob": 0.0,
 }
 
 PARAMS["image-object-detection"] = {

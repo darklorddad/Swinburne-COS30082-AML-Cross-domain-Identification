@@ -78,3 +78,5 @@ class ImageClassificationParams(AutoTrainParams):
     color_jitter_strength: float = Field(0.4, title="Strength of Color Jitter (Brightness/Contrast/Saturation)")
     backbone_lr: float = Field(1e-5, title="Learning Rate for Backbone")
     head_lr: float = Field(1e-3, title="Learning Rate for Head")
+    use_class_balanced_sampler: bool = Field(False, title="Use Class Balanced Sampler")
+    cutout_prob: float = Field(0.0, title="Probability of Cutout/Erasure")

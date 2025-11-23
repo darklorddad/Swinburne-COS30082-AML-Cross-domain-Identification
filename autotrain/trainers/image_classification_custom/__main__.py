@@ -29,6 +29,40 @@ from autotrain.trainers.image_classification_custom.utils import ArcFaceClassifi
 from autotrain.trainers.image_classification_custom.params import ImageClassificationParams
 
 
+class CustomTrainer(Trainer):
+    def __init__(self, class_weights=None, **kwargs):
+        super().__init__(**kwargs)
+        self.class_weights = class_weights
+
+    def get_train_dataloader(self):
+        if self.train_dataset is None:
+            raise ValueError("Trainer: training requires a train_dataset.")
+
+        if self.class_weights is None:
+            return super().get_train_dataloader()
+
+        train_dataset = self.train_dataset
+        data_collator = self.data_collator
+
+        # Access the underlying HF dataset from ImageClassificationDataset wrapper
+        labels = train_dataset.data[train_dataset.config.target_column]
+        sample_weights = [self.class_weights[l] for l in labels]
+
+        sampler = torch.utils.data.WeightedRandomSampler(
+            weights=sample_weights, num_samples=len(sample_weights), replacement=True
+        )
+
+        return torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=self._train_batch_size,
+            sampler=sampler,
+            collate_fn=data_collator,
+            drop_last=self.args.dataloader_drop_last,
+            num_workers=self.args.dataloader_num_workers,
+            pin_memory=self.args.dataloader_pin_memory,
+        )
+
+
 def parse_args():
     # get training_config.json from the end user
     parser = argparse.ArgumentParser()
@@ -192,7 +226,19 @@ def train(config):
     warmup_args_dict["num_train_epochs"] = config.warmup_epochs
     warmup_args_dict["learning_rate"] = config.head_lr
 
-    trainer_warmup = Trainer(
+    # Calculate class weights for sampler if enabled
+    class_weights = None
+    if config.use_class_balanced_sampler:
+        import numpy as np
+
+        labels = train_data.data[config.target_column]
+        class_counts = np.bincount(labels)
+        class_weights = 1.0 / class_counts
+        class_weights = torch.tensor(class_weights, dtype=torch.float)
+        logger.info("Using Class Balanced Sampler")
+
+    trainer_warmup = CustomTrainer(
+        class_weights=class_weights,
         args=TrainingArguments(**warmup_args_dict),
         model=model,
         train_dataset=train_data,
@@ -219,7 +265,8 @@ def train(config):
 
     args = TrainingArguments(**training_args_dict)
 
-    trainer = Trainer(
+    trainer = CustomTrainer(
+        class_weights=class_weights,
         args=args,
         model=model,
         callbacks=callbacks_to_use,

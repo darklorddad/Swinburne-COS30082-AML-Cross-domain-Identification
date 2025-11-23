@@ -106,6 +106,8 @@ PARAMS["image-classification-custom"] = ImageClassificationCustomParams(
     grayscale_prob=0.2,
     backbone_lr=1e-5,
     head_lr=1e-3,
+    use_class_balanced_sampler=False,
+    cutout_prob=0.0,
 ).model_dump()
 PARAMS["image-object-detection"] = ObjectDetectionParams(
     mixed_precision="fp16",
