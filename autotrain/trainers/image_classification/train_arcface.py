@@ -100,7 +100,7 @@ class ArcFaceModel(nn.Module):
 
 
 class ArcFaceTrainer(Trainer):
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         labels = inputs.get("labels")
         outputs = model(pixel_values=inputs["pixel_values"], labels=labels)
         loss = outputs["loss"]
