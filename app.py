@@ -14,7 +14,7 @@ DEFAULT_MANIFEST_PATH = os.path.join('core', 'manifest.md').replace(os.sep, '/')
 # GRADIO UI
 # #############################################################################
 
-with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !important}") as demo:
+with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !important} .gradio-container {max-width: 75% !important; margin-left: auto; margin-right: auto;}") as demo:
 
     gr.HTML(
         """
