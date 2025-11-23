@@ -317,6 +317,8 @@ model.eval()
         "arcface_s": config.arcface_s,
         "arcface_m": config.arcface_m,
         "image_size": image_processor.size if image_processor else {"height": 224, "width": 224},
+        "id2label": {i: c for i, c in enumerate(classes)},
+        "label2id": label2id,
     }
     with open(f"{config.project_name}/config.json", "w") as f:
         json.dump(custom_config, f, indent=4)
