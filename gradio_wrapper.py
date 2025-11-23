@@ -34,15 +34,15 @@ def get_placeholder_plot():
     return fig
 
 
-def plot_tsne(embeddings, true_labels, mrr_score, is_logits=False):
+def plot_tsne(embeddings, true_labels, mrr_score, is_logits=False, perplexity=30):
     if len(embeddings) < 2:
         return None
         
     embeddings_np = np.array(embeddings)
     n_samples = embeddings_np.shape[0]
-    perplexity = min(30, n_samples - 1)
+    safe_perplexity = min(perplexity, n_samples - 1)
     
-    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42, init='pca', learning_rate='auto')
+    tsne = TSNE(n_components=2, perplexity=safe_perplexity, random_state=42, init='pca', learning_rate='auto')
     tsne_results = tsne.fit_transform(embeddings_np)
     
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -243,7 +243,7 @@ def plot_metrics(mrr, top1, top5):
     return fig
 
 
-def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, test_dir, batch_size=32):
+def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, test_dir, batch_size=32, perplexity=30):
     if not test_dir or not os.path.exists(test_dir):
         raise gr.Error("Please provide a valid test directory.")
 
@@ -477,7 +477,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
             tsne_labels = [true_labels[i] for i in indices]
         
         # Generate t-SNE Plot
-        tsne_fig = plot_tsne(tsne_embeddings, tsne_labels, mrr, is_logits=fallback_to_logits)
+        tsne_fig = plot_tsne(tsne_embeddings, tsne_labels, mrr, is_logits=fallback_to_logits, perplexity=perplexity)
         
         # Generate Metrics Plot
         metrics_fig = plot_metrics(mrr, top1_acc, top5_acc)
@@ -491,7 +491,8 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
             "embeddings": embeddings_list, 
             "true_labels": true_labels,
             "skipped_folders": skipped_folders,
-            "fallback_to_logits": fallback_to_logits
+            "fallback_to_logits": fallback_to_logits,
+            "perplexity": perplexity
         }
 
         return tsne_fig, metrics_fig, results_dict
@@ -534,9 +535,10 @@ def save_evaluation_results(results_dict, output_dir):
         true_labels = results_dict.get("true_labels")
         mrr = results_dict.get("mrr")
         fallback = results_dict.get("fallback_to_logits", False)
+        perplexity = results_dict.get("perplexity", 30)
         
         if embeddings and true_labels:
-            fig = plot_tsne(embeddings, true_labels, mrr, is_logits=fallback)
+            fig = plot_tsne(embeddings, true_labels, mrr, is_logits=fallback, perplexity=perplexity)
             if fig:
                 fig.savefig(os.path.join(output_dir, "tsne_plot.png"))
                 plt.close(fig)

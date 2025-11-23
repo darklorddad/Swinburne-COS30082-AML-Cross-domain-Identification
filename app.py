@@ -132,6 +132,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             with gr.Accordion("Settings", open=False):
                 eval_test_dir = gr.Textbox(label="Path to test set", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set"))
                 eval_batch_size = gr.Slider(minimum=1, maximum=128, value=32, step=1, label="Batch size")
+                eval_perplexity = gr.Slider(minimum=2, maximum=100, value=30, step=1, label="t-SNE Perplexity")
             eval_button = gr.Button("Run evaluation", variant="primary")
 
         # 3. Save Evaluation (Hidden until run)
@@ -173,7 +174,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             outputs=[eval_results_container, eval_save_container]
         ).then(
             fn=evaluate_test_set,
-            inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file, eval_pth_arch, eval_pth_classes, eval_test_dir, eval_batch_size],
+            inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file, eval_pth_arch, eval_pth_classes, eval_test_dir, eval_batch_size, eval_perplexity],
             outputs=[eval_plot_tsne, eval_plot_metrics, eval_results_state]
         )
         
