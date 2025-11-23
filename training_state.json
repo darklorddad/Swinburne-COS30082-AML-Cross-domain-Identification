@@ -1,5 +1,5 @@
 {
-  "last_updated": "2025-11-23T10:37:26.082289",
+  "last_updated": "2025-11-23T14:18:33.669231",
   "approach_a": {
     "features": {
       "plant_pretrained_base": {
@@ -143,7 +143,7 @@
         "metrics": {}
       },
       "imagenet_large": {
-        "status": "in_progress",
+        "status": "completed",
         "last_run": "2025-11-23T10:37:26.082265",
         "error": null,
         "metrics": {}
