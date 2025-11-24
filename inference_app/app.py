@@ -8,6 +8,9 @@ from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 import json
+import re
+import tempfile
+from sklearn.manifold import TSNE
 
 def get_model_choices():
     """
@@ -383,6 +386,497 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
 
     return predictions, heatmap
 
+def get_placeholder_plot():
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.text(0.5, 0.5, "Evaluation in progress...", ha='center', va='center', fontsize=12, color='gray')
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    plt.tight_layout()
+    return fig
+
+def plot_tsne(embeddings, true_labels, mrr_score, is_logits=False, perplexity=30):
+    if len(embeddings) < 2:
+        return None
+        
+    embeddings_np = np.array(embeddings)
+    n_samples = embeddings_np.shape[0]
+    safe_perplexity = min(perplexity, n_samples - 1)
+    
+    tsne = TSNE(n_components=2, perplexity=safe_perplexity, random_state=42, init='pca', learning_rate='auto')
+    tsne_results = tsne.fit_transform(embeddings_np)
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    unique_labels = list(set(true_labels))
+    cmap = plt.get_cmap('tab10' if len(unique_labels) <= 10 else 'viridis')
+    
+    for i, label in enumerate(unique_labels):
+        indices = [j for j, l in enumerate(true_labels) if l == label]
+        points = tsne_results[indices]
+        color = cmap(i / len(unique_labels))
+        ax.scatter(points[:, 0], points[:, 1], label=label, color=color, s=60, alpha=0.8)
+    
+    title = f"t-SNE Visualisation (MRR: {mrr_score:.4f})"
+    if is_logits:
+        title += "\n(Feature extraction failed; using logits)"
+    ax.set_title(title)
+
+    if len(unique_labels) <= 20:
+        ax.legend()
+    
+    plt.tight_layout()
+    return fig
+
+def plot_metrics(mrr, top1, top5):
+    fig, ax = plt.subplots(figsize=(10, 6))
+    metrics = ['MRR', 'Top-1 Acc', 'Top-5 Acc']
+    values = [mrr, top1, top5]
+    bars = ax.bar(metrics, values, color=['#3498db', '#2ecc71', '#9b59b6'])
+    
+    ax.set_ylim(0, 1.0)
+    ax.set_title('Evaluation Metrics')
+    ax.set_ylabel('Score')
+    
+    # Add value labels
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.4f}',
+                ha='center', va='bottom')
+    
+    plt.tight_layout()
+    return fig
+
+def extract_features_and_logits(model, processor, batch_images, device, model_type):
+    batch_emb_numpy = None
+    logits = None
+    fallback_to_logits = False
+
+    with torch.no_grad():
+        if model_type == "hf":
+            inputs = processor(images=batch_images, return_tensors="pt")
+            if hasattr(inputs, "to"):
+                inputs = inputs.to(device)
+            else:
+                inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+            
+            # Try to get hidden states
+            try:
+                outputs = model(**inputs, output_hidden_states=True)
+            except TypeError:
+                # Model might not support output_hidden_states kwarg or **inputs
+                if "pixel_values" in inputs:
+                    outputs = model(inputs["pixel_values"])
+                else:
+                    outputs = model(**inputs)
+
+            # Determine Logits
+            if hasattr(outputs, "logits"):
+                logits = outputs.logits
+            else:
+                logits = outputs
+
+            # Determine Embeddings
+            if hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
+                batch_emb_numpy = outputs.pooler_output.cpu().numpy()
+            elif hasattr(outputs, 'hidden_states') and outputs.hidden_states:
+                last_hidden = outputs.hidden_states[-1]
+                if last_hidden.dim() == 4:
+                    batch_emb_numpy = last_hidden.mean(dim=[2, 3]).cpu().numpy()
+                elif last_hidden.dim() == 3:
+                    batch_emb_numpy = last_hidden.mean(dim=1).cpu().numpy()
+                else:
+                    batch_emb_numpy = last_hidden.cpu().numpy()
+            else:
+                # LOUD FAILURE for feature extraction
+                print("WARNING: Feature extraction failed! Model does not return hidden_states or pooler_output. Falling back to logits.")
+                batch_emb_numpy = logits.cpu().numpy()
+                fallback_to_logits = True
+
+        elif model_type == "timm":
+            tensors = [processor(img) for img in batch_images]
+            input_tensor = torch.stack(tensors).to(device)
+            try:
+                features = model.forward_features(input_tensor)
+                if features.dim() == 4:
+                    batch_emb_numpy = features.mean(dim=[2, 3]).cpu().numpy()
+                elif features.dim() == 3:
+                    batch_emb_numpy = features.mean(dim=1).cpu().numpy()
+                else:
+                    batch_emb_numpy = features.cpu().numpy()
+                
+                if hasattr(model, 'forward_head'):
+                    logits = model.forward_head(features)
+                else:
+                    logits = model(input_tensor)
+            except Exception:
+                logits = model(input_tensor)
+                batch_emb_numpy = logits.cpu().numpy()
+                fallback_to_logits = True
+                
+    return batch_emb_numpy, logits, fallback_to_logits
+
+def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, test_dir, batch_size=32, perplexity=30, eval_mode="Standard", reference_dir=None):
+    if not test_dir or not os.path.exists(test_dir):
+        raise gr.Error("Please provide a valid test directory.")
+
+    model, processor, model_type, extra_data = load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes)
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    model.eval()
+
+    # --- PROTOTYPE RETRIEVAL SETUP ---
+    prototypes_tensor = None
+    
+    if eval_mode == "Prototype Retrieval":
+        if not reference_dir or not os.path.exists(reference_dir):
+            raise gr.Error("Please provide a valid reference directory for prototype retrieval.")
+        
+        gr.Info("Computing prototypes from reference set...")
+        
+        # Scan reference directory
+        ref_paths = []
+        ref_labels = []
+        for root, dirs, files in os.walk(reference_dir):
+            if os.path.abspath(root) == os.path.abspath(reference_dir): continue
+            class_name = os.path.basename(root)
+            for f in files:
+                if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+                    ref_paths.append(os.path.join(root, f))
+                    ref_labels.append(class_name)
+        
+        if not ref_paths:
+            raise gr.Error("No images found in reference directory.")
+
+        # Compute embeddings for reference set
+        ref_embeddings = []
+        ref_labels_processed = []
+        
+        for i in range(0, len(ref_paths), batch_size):
+            batch_p = ref_paths[i : i + batch_size]
+            batch_l = ref_labels[i : i + batch_size]
+            
+            batch_imgs = []
+            valid_l = []
+            for idx, p in enumerate(batch_p):
+                try:
+                    img = Image.open(p).convert("RGB")
+                    batch_imgs.append(img)
+                    valid_l.append(batch_l[idx])
+                except Exception:
+                    pass
+            
+            if not batch_imgs: continue
+            
+            feats, _, _ = extract_features_and_logits(model, processor, batch_imgs, device, model_type)
+            if feats is not None:
+                ref_embeddings.extend(feats)
+                ref_labels_processed.extend(valid_l)
+        
+        if not ref_embeddings:
+            raise gr.Error("Failed to extract features from reference set.")
+
+        # Compute Prototypes (Mean Embedding per Class)
+        ref_embeddings = np.array(ref_embeddings)
+        unique_classes = sorted(list(set(ref_labels_processed)))
+        
+        prototypes = []
+        for cls in unique_classes:
+            indices = [i for i, l in enumerate(ref_labels_processed) if l == cls]
+            class_embs = ref_embeddings[indices]
+            # Mean and Normalize
+            proto = np.mean(class_embs, axis=0)
+            proto = proto / (np.linalg.norm(proto) + 1e-9)
+            prototypes.append(proto)
+            
+        prototypes_tensor = torch.tensor(np.array(prototypes), device=device, dtype=torch.float)
+        
+        # Override label mapping for evaluation
+        id2label = {i: name for i, name in enumerate(unique_classes)}
+        label2id = {name: i for i, name in enumerate(unique_classes)}
+        
+    else:
+        # Standard Mode: Use Model's Classes
+        id2label = {}
+        label2id = {}
+        
+        if model_type == "hf" or model_type == "custom_arcface":
+            id2label = model.config.id2label
+            label2id = {v: k for k, v in id2label.items()}
+        elif model_type == "timm":
+            class_names = extra_data.get('class_names')
+            if class_names:
+                id2label = {i: name for i, name in enumerate(class_names)}
+                label2id = {name: i for i, name in enumerate(class_names)}
+    
+    # Scan directory structure for images
+    # Expected structure: test_dir/class_name/image.jpg
+    image_paths = []
+    image_labels = []
+    
+    # Helper for fuzzy matching (snake_case normalization)
+    def normalize_name(name):
+        s = str(name).strip().lower()
+        s = re.sub(r'[\s\-]+', '_', s)
+        s = re.sub(r'[^a-z0-9_]', '', s)
+        return s.strip('_')
+
+    # Create a normalized map of model labels
+    # label2id keys are the class names the model knows
+    norm_model_labels = {}
+    for k in label2id.keys():
+        # 1. Full normalized match
+        norm_model_labels[normalize_name(k)] = k
+        # 2. If format is "ID; Name", match against Name part
+        if ';' in k:
+            parts = k.split(';', 1)
+            if len(parts) == 2:
+                norm_model_labels[normalize_name(parts[1])] = k
+    
+    found_folders = []
+    skipped_folders = []
+    
+    for root, dirs, files in os.walk(test_dir):
+        if os.path.abspath(root) == os.path.abspath(test_dir):
+            continue # Skip root folder
+            
+        folder_name = os.path.basename(root)
+        found_folders.append(folder_name)
+        
+        # Try exact match
+        matched_label = None
+        if folder_name in label2id:
+            matched_label = folder_name
+        # Try normalized match
+        elif normalize_name(folder_name) in norm_model_labels:
+            matched_label = norm_model_labels[normalize_name(folder_name)]
+        
+        if not matched_label:
+            skipped_folders.append(folder_name)
+            continue
+            
+        for f in files:
+            if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+                image_paths.append(os.path.join(root, f))
+                image_labels.append(matched_label) # Use the model's label, not the folder name
+
+    if not image_paths:
+        # Generate a helpful error message
+        model_classes_sample = list(label2id.keys())[:5]
+        folders_sample = found_folders[:5]
+        msg = (
+            f"No valid images found. \n"
+            f"Checked {len(found_folders)} subfolders in '{test_dir}'.\n"
+            f"Sample folders found: {folders_sample}\n"
+            f"Sample model classes: {model_classes_sample}\n"
+            f"Ensure folder names match model class names (case-insensitive, snake_case handled)."
+        )
+        raise gr.Error(msg)
+
+    true_labels = []
+    ranks = []
+    top1_correct = 0
+    top5_correct = 0
+    total_processed = 0
+    fallback_to_logits = False
+    
+    # Use a temporary file to store embeddings to avoid OOM on large datasets
+    embeddings_file = tempfile.NamedTemporaryFile(delete=False, suffix='.npy')
+    embeddings_path = embeddings_file.name
+    embeddings_file.close()
+    
+    progress = gr.Progress()
+    
+    try:
+        with open(embeddings_path, 'wb') as f_emb:
+            # Batch processing loop
+            for i in progress.tqdm(range(0, len(image_paths), batch_size), desc="Evaluating"):
+                batch_paths = image_paths[i : i + batch_size]
+                batch_labels = image_labels[i : i + batch_size]
+                
+                # Load images
+                batch_images = []
+                valid_indices = [] 
+                for idx, p in enumerate(batch_paths):
+                    try:
+                        img = Image.open(p).convert("RGB")
+                        batch_images.append(img)
+                        valid_indices.append(idx)
+                    except Exception:
+                        pass
+                
+                if not batch_images: continue
+
+                # Inference
+                batch_emb_numpy, logits, fallback = extract_features_and_logits(model, processor, batch_images, device, model_type)
+                
+                if fallback:
+                    fallback_to_logits = True
+
+                # Save embeddings to disk
+                if batch_emb_numpy is not None:
+                    np.save(f_emb, batch_emb_numpy)
+
+                # Determine Logits for Metrics
+                if eval_mode == "Prototype Retrieval" and prototypes_tensor is not None and batch_emb_numpy is not None:
+                    # Cosine Similarity: (B, D) @ (C, D).T -> (B, C)
+                    # Ensure embeddings are normalized
+                    feats_t = torch.tensor(batch_emb_numpy, device=device)
+                    feats_t = torch.nn.functional.normalize(feats_t, dim=1)
+                    
+                    # Prototypes are already normalized
+                    sim_logits = torch.matmul(feats_t, prototypes_tensor.t())
+                    
+                    # Use similarity as logits
+                    final_logits = sim_logits
+                else:
+                    # Standard Mode
+                    if isinstance(logits, torch.Tensor):
+                        final_logits = logits
+                    else:
+                        final_logits = torch.tensor(logits, device=device)
+
+                # Metrics Calculation
+                # For cosine similarity, higher is better, so softmax works (or just argsort directly)
+                # Softmax is monotonic, so argsort order is preserved.
+                probs = torch.nn.functional.softmax(final_logits, dim=1)
+                sorted_indices = torch.argsort(probs, descending=True, dim=1)
+                
+                for j, valid_idx in enumerate(valid_indices):
+                    gt_label = batch_labels[valid_idx]
+                    gt_id = label2id[gt_label]
+                    
+                    # Rank (MRR)
+                    try:
+                        rank = (sorted_indices[j] == gt_id).nonzero(as_tuple=True)[0].item() + 1
+                        ranks.append(1.0 / rank)
+                    except Exception:
+                        ranks.append(0)
+
+                    # Top-1
+                    if sorted_indices[j][0] == gt_id:
+                        top1_correct += 1
+                        
+                    # Top-5
+                    if gt_id in sorted_indices[j][:5]:
+                        top5_correct += 1
+                        
+                    true_labels.append(gt_label)
+                    total_processed += 1
+        
+        if total_processed == 0:
+            raise gr.Error("No valid labeled images found.")
+
+        # Calculate final metrics
+        mrr = np.mean(ranks)
+        top1_acc = top1_correct / total_processed
+        top5_acc = top5_correct / total_processed
+        
+        # Load embeddings back for t-SNE (handling memory limit)
+        embeddings_list = []
+        try:
+            with open(embeddings_path, 'rb') as f_emb:
+                while True:
+                    try:
+                        batch = np.load(f_emb)
+                        embeddings_list.extend(batch)
+                    except (ValueError, EOFError, OSError):
+                        break
+        except (FileNotFoundError, OSError):
+            pass
+            
+        # If too many embeddings, downsample for t-SNE to avoid OOM/Freeze
+        MAX_TSNE_SAMPLES = 3000
+        tsne_embeddings = embeddings_list
+        tsne_labels = true_labels
+        
+        if len(embeddings_list) > MAX_TSNE_SAMPLES:
+            indices = np.random.choice(len(embeddings_list), MAX_TSNE_SAMPLES, replace=False)
+            tsne_embeddings = [embeddings_list[i] for i in indices]
+            tsne_labels = [true_labels[i] for i in indices]
+        
+        # Generate t-SNE Plot
+        tsne_fig = plot_tsne(tsne_embeddings, tsne_labels, mrr, is_logits=fallback_to_logits, perplexity=perplexity)
+        
+        # Generate Metrics Plot
+        metrics_fig = plot_metrics(mrr, top1_acc, top5_acc)
+
+        # Prepare results dict for export
+        results_dict = {
+            "mrr": mrr,
+            "top1": top1_acc,
+            "top5": top5_acc,
+            "total": total_processed,
+            "embeddings": embeddings_list, 
+            "true_labels": true_labels,
+            "skipped_folders": skipped_folders,
+            "fallback_to_logits": fallback_to_logits,
+            "perplexity": perplexity
+        }
+
+        return tsne_fig, metrics_fig, results_dict
+
+    finally:
+        # Cleanup temp file
+        if os.path.exists(embeddings_path):
+            os.remove(embeddings_path)
+
+def save_evaluation_results(results_dict, output_dir):
+    if not results_dict:
+        return "No evaluation results to save. Please run evaluation first."
+    if not output_dir:
+        return "Please specify an output directory."
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    try:
+        # 1. Save Single JSON with details
+        # Convert numpy arrays in embeddings to lists for JSON serialization
+        embeddings_list = [e.tolist() if isinstance(e, np.ndarray) else e for e in results_dict.get("embeddings", [])]
+        
+        data_to_save = {
+            "mrr": results_dict.get("mrr"),
+            "top1_accuracy": results_dict.get("top1"),
+            "top5_accuracy": results_dict.get("top5"),
+            "total_images": results_dict.get("total"),
+            "skipped_folders": results_dict.get("skipped_folders", []),
+            "true_labels": results_dict.get("true_labels"),
+            "embeddings": embeddings_list 
+        }
+        
+        with open(os.path.join(output_dir, "evaluation_results.json"), "w", encoding="utf-8") as f:
+            json.dump(data_to_save, f, indent=4)
+            
+        # 2. Save Plots as Images
+        # t-SNE
+        embeddings = results_dict.get("embeddings")
+        true_labels = results_dict.get("true_labels")
+        mrr = results_dict.get("mrr")
+        fallback = results_dict.get("fallback_to_logits", False)
+        perplexity = results_dict.get("perplexity", 30)
+        
+        if embeddings and true_labels:
+            fig = plot_tsne(embeddings, true_labels, mrr, is_logits=fallback, perplexity=perplexity)
+            if fig:
+                fig.savefig(os.path.join(output_dir, "tsne_plot.png"))
+                plt.close(fig)
+        
+        # Metrics Plot
+        mrr = results_dict.get("mrr")
+        top1 = results_dict.get("top1")
+        top5 = results_dict.get("top5")
+        if mrr is not None:
+            fig = plot_metrics(mrr, top1, top5)
+            fig.savefig(os.path.join(output_dir, "metrics_plot.png"))
+            plt.close(fig)
+                
+        return f"Successfully saved evaluation results to {output_dir}"
+    except Exception as e:
+        return f"Failed to save results: {e}"
+
 def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, input_image):
     # 1. Classify
     try:
@@ -445,66 +939,162 @@ def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth
 # UI Construction
 with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !important}", title="Plant Species Identification") as demo:
     
-    with gr.Row():
-        with gr.Column(scale=1):
-            with gr.Group():
-                inf_source = gr.Radio(
-                    choices=["Local", "Hugging Face Hub", "Local .pth"],
-                    value="Local",
-                    label="Model source"
-                )
-                
-                inf_model_path = gr.Dropdown(
-                    label="Select local model", 
-                    choices=[], 
-                    value=None, 
-                    filterable=True,
-                    visible=True,
-                    allow_custom_value=True
-                )
-                
-                inf_hf_id = gr.Textbox(
-                    label="Hugging Face model ID", 
-                    visible=False
-                )
-                
-                with gr.Column(visible=False) as inf_pth_group:
-                    inf_pth_file = gr.Textbox(label="Path to .pth file")
-                    inf_pth_classes = gr.Textbox(label="Path to class list (txt/json)")
-                    inf_pth_arch = gr.Textbox(label="Architecture name (timm)")
+    with gr.Tab("Inference"):
+        with gr.Row():
+            with gr.Column(scale=1):
+                with gr.Group():
+                    inf_source = gr.Radio(
+                        choices=["Local", "Hugging Face Hub", "Local .pth"],
+                        value="Local",
+                        label="Model source"
+                    )
+                    
+                    inf_model_path = gr.Dropdown(
+                        label="Select local model", 
+                        choices=[], 
+                        value=None, 
+                        filterable=True,
+                        visible=True,
+                        allow_custom_value=True
+                    )
+                    
+                    inf_hf_id = gr.Textbox(
+                        label="Hugging Face model ID", 
+                        visible=False
+                    )
+                    
+                    with gr.Column(visible=False) as inf_pth_group:
+                        inf_pth_file = gr.Textbox(label="Path to .pth file")
+                        inf_pth_classes = gr.Textbox(label="Path to class list (txt/json)")
+                        inf_pth_arch = gr.Textbox(label="Architecture name (timm)")
 
-            inf_input_image = gr.Image(type="pil", label="Upload field image")
+                inf_input_image = gr.Image(type="pil", label="Upload field image")
 
-        with gr.Column(scale=1):
-            res_label = gr.Label(num_top_classes=5, label="Predictions")
-            res_gallery = gr.Gallery(label="Matching herbarium specimens", columns=3, height="auto")
-            res_heatmap = gr.Image(label="Heatmap")
-            inf_button = gr.Button("Identify species", variant="primary")
+            with gr.Column(scale=1):
+                res_label = gr.Label(num_top_classes=5, label="Predictions")
+                res_gallery = gr.Gallery(label="Matching herbarium specimens", columns=3, height="auto")
+                res_heatmap = gr.Image(label="Heatmap")
+                inf_button = gr.Button("Identify species", variant="primary")
 
-    # Event Handlers
-    def update_inf_inputs(source):
-        return (
-            gr.update(visible=(source == "Local")),
-            gr.update(visible=(source == "Hugging Face Hub")),
-            gr.update(visible=(source == "Local .pth"))
+        # Event Handlers for Inference
+        def update_inf_inputs(source):
+            return (
+                gr.update(visible=(source == "Local")),
+                gr.update(visible=(source == "Hugging Face Hub")),
+                gr.update(visible=(source == "Local .pth"))
+            )
+
+        inf_source.change(
+            fn=update_inf_inputs,
+            inputs=[inf_source],
+            outputs=[inf_model_path, inf_hf_id, inf_pth_group]
         )
 
-    inf_source.change(
-        fn=update_inf_inputs,
-        inputs=[inf_source],
-        outputs=[inf_model_path, inf_hf_id, inf_pth_group]
-    )
+        inf_button.click(
+            fn=predict_and_retrieve,
+            inputs=[inf_source, inf_model_path, inf_hf_id, inf_pth_file, inf_pth_arch, inf_pth_classes, inf_input_image],
+            outputs=[res_label, res_gallery, res_heatmap]
+        )
 
-    inf_button.click(
-        fn=predict_and_retrieve,
-        inputs=[inf_source, inf_model_path, inf_hf_id, inf_pth_file, inf_pth_arch, inf_pth_classes, inf_input_image],
-        outputs=[res_label, res_gallery, res_heatmap]
-    )
+    with gr.Tab("Evaluation"):
+        # 1. Model Selection
+        with gr.Row():
+            with gr.Column():
+                with gr.Group():
+                    eval_source = gr.Radio(
+                        choices=["Local", "Hugging Face Hub", "Local .pth"],
+                        value="Local",
+                        label="Model source"
+                    )
+                
+                    eval_model_path = gr.Dropdown(
+                        label="Select local model", 
+                        choices=[], 
+                        value=None, 
+                        filterable=True,
+                        visible=True,
+                        allow_custom_value=True
+                    )
+                    eval_hf_id = gr.Textbox(
+                        label="Hugging Face model ID", 
+                        visible=False
+                    )
+                    with gr.Column(visible=False) as eval_pth_group:
+                        eval_pth_file = gr.Textbox(label="Path to .pth file")
+                        eval_pth_classes = gr.Textbox(label="Path to class list (txt/json)")
+                        eval_pth_arch = gr.Textbox(
+                            label="Architecture name (timm)"
+                        )
+
+        # 2. Test Set & Run
+        with gr.Column(visible=True) as eval_run_container:
+            with gr.Accordion("Settings", open=False):
+                eval_test_dir = gr.Textbox(label="Path to test set", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set"))
+                eval_mode = gr.Radio(["Standard", "Prototype Retrieval"], label="Evaluation Mode", value="Standard")
+                eval_ref_dir = gr.Textbox(label="Path to reference set (for prototypes)", visible=False)
+                eval_batch_size = gr.Slider(minimum=1, maximum=128, value=32, step=1, label="Batch size")
+                eval_perplexity = gr.Slider(minimum=2, maximum=100, value=30, step=1, label="t-SNE Perplexity")
+            eval_button = gr.Button("Run evaluation", variant="primary")
+
+        # 3. Save Evaluation (Hidden until run)
+        with gr.Column(visible=False) as eval_save_container:
+            with gr.Accordion("Save evaluation", open=False):
+                with gr.Column():
+                    eval_export_dir = gr.Textbox(label="Export directory")
+                    eval_export_btn = gr.Button("Save", variant="primary")
+                    eval_export_status = gr.Textbox(label="Status", interactive=False)
+
+        # 4. Results (Hidden until run)
+        eval_results_state = gr.State()
+        
+        with gr.Column(visible=False) as eval_results_container:
+            with gr.Row():
+                eval_plot_tsne = gr.Plot(label="t-SNE Visualisation", value=get_placeholder_plot())
+                eval_plot_metrics = gr.Plot(label="Metrics", value=get_placeholder_plot())
+
+        # Logic for Evaluation
+        def update_eval_inputs(source):
+            is_local = (source == "Local")
+            is_hf = (source == "Hugging Face Hub")
+            is_pth = (source == "Local .pth")
+            
+            return (
+                gr.update(visible=is_local),
+                gr.update(visible=is_hf),
+                gr.update(visible=is_pth)
+            )
+
+        eval_source.change(
+            fn=update_eval_inputs,
+            inputs=[eval_source],
+            outputs=[eval_model_path, eval_hf_id, eval_pth_group]
+        )
+
+        def update_eval_mode(mode):
+            return gr.update(visible=(mode == "Prototype Retrieval"))
+
+        eval_mode.change(fn=update_eval_mode, inputs=[eval_mode], outputs=[eval_ref_dir])
+
+        eval_button.click(
+            fn=lambda: (gr.update(visible=True), gr.update(visible=True)),
+            outputs=[eval_results_container, eval_save_container]
+        ).then(
+            fn=evaluate_test_set,
+            inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file, eval_pth_arch, eval_pth_classes, eval_test_dir, eval_batch_size, eval_perplexity, eval_mode, eval_ref_dir],
+            outputs=[eval_plot_tsne, eval_plot_metrics, eval_results_state]
+        )
+        
+        eval_export_btn.click(
+            fn=save_evaluation_results,
+            inputs=[eval_results_state, eval_export_dir],
+            outputs=[eval_export_status]
+        )
 
     def refresh_models():
-        return update_model_choices()
+        u = update_model_choices()
+        return u, u
 
-    demo.load(fn=refresh_models, outputs=inf_model_path)
+    demo.load(fn=refresh_models, outputs=[inf_model_path, eval_model_path])
 
 if __name__ == "__main__":
     demo.launch()
