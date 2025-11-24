@@ -937,6 +937,11 @@ def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth
     return predictions, herbarium_images, heatmap
 
 # UI Construction
+app_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(app_dir)
+default_test_dir = os.path.join(parent_dir, "Dataset", "Test-set")
+default_ref_dir = os.path.join(parent_dir, "Dataset", "Split-set")
+
 with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !important}", title="Plant Species Identification") as demo:
     
     with gr.Tab("Inference"):
@@ -1029,9 +1034,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         # 2. Test Set & Run
         with gr.Column(visible=True) as eval_run_container:
             with gr.Accordion("Settings", open=False):
-                eval_test_dir = gr.Textbox(label="Path to test set", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set"))
+                eval_test_dir = gr.Textbox(label="Path to test set", value=default_test_dir)
                 eval_mode = gr.Radio(["Standard", "Prototype Retrieval"], label="Evaluation Mode", value="Standard")
-                eval_ref_dir = gr.Textbox(label="Path to reference set (for prototypes)", visible=False)
+                eval_ref_dir = gr.Textbox(label="Path to reference set (for prototypes)", value=default_ref_dir, visible=False)
                 eval_batch_size = gr.Slider(minimum=1, maximum=128, value=32, step=1, label="Batch size")
                 eval_perplexity = gr.Slider(minimum=2, maximum=100, value=30, step=1, label="t-SNE Perplexity")
             eval_button = gr.Button("Run evaluation", variant="primary")
