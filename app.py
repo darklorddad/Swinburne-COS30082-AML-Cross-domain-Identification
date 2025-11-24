@@ -76,6 +76,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
             with gr.Column(scale=1):
                 inf_output_label = gr.Label(num_top_classes=5, label="Predictions")
+                inf_heatmap = gr.Image(label="Heatmap")
                 inf_button = gr.Button("Classify", variant="primary")
 
         def update_inf_inputs(source):
@@ -94,7 +95,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         inf_button.click(
             fn=classify_plant, 
             inputs=[inf_source, inf_model_path, inf_hf_id, inf_pth_file, inf_pth_arch, inf_pth_classes, inf_input_image], 
-            outputs=inf_output_label
+            outputs=[inf_output_label, inf_heatmap]
         )
 
     with gr.Tab("Evaluation"):

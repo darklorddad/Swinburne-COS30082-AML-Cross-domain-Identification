@@ -250,26 +250,115 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
     return model, processor, model_type, extra_data
 
 
-def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, input_image) -> dict:
+def get_gradcam(model, input_tensor, original_img):
+    try:
+        # Identify target layer (last Conv2d)
+        target_layer = None
+        # Iterate in reverse to find last Conv2d
+        for name, module in reversed(list(model.named_modules())):
+            if isinstance(module, torch.nn.Conv2d):
+                target_layer = module
+                break
+        
+        if target_layer is None:
+            return None
+
+        gradients = []
+        activations = []
+
+        def backward_hook(module, grad_input, grad_output):
+            gradients.append(grad_output[0])
+
+        def forward_hook(module, input, output):
+            activations.append(output)
+
+        handle_b = target_layer.register_full_backward_hook(backward_hook)
+        handle_f = target_layer.register_forward_hook(forward_hook)
+
+        # Forward pass with gradients
+        model.eval()
+        model.zero_grad()
+        
+        # Handle input dict vs tensor
+        if isinstance(input_tensor, dict):
+            output = model(**input_tensor)
+        else:
+            output = model(input_tensor)
+
+        if hasattr(output, "logits"):
+            logits = output.logits
+        else:
+            logits = output
+
+        # Target class (max)
+        pred_idx = logits.argmax(dim=1)
+        score = logits[0, pred_idx]
+
+        # Backward
+        score.backward()
+
+        handle_b.remove()
+        handle_f.remove()
+
+        if not gradients or not activations:
+            return None
+
+        grads = gradients[0].detach() # [1, C, H, W]
+        acts = activations[0].detach() # [1, C, H, W]
+        
+        weights = torch.mean(grads, dim=(2, 3), keepdim=True)
+        cam = torch.sum(weights * acts, dim=1, keepdim=True)
+        cam = F.relu(cam)
+        
+        # Normalize
+        cam = cam - cam.min()
+        cam_max = cam.max()
+        if cam_max > 0:
+            cam = cam / cam_max
+        
+        cam_np = cam.squeeze().cpu().numpy()
+        
+        # Resize to original image size
+        w, h = original_img.size
+        
+        # Use matplotlib colormap
+        cm = plt.get_cmap('jet')
+        heatmap = cm(cam_np)[..., :3] # RGB, 0..1
+        
+        heatmap_uint8 = (heatmap * 255).astype(np.uint8)
+        heatmap_pil = Image.fromarray(heatmap_uint8).resize((w, h), resample=Image.BILINEAR)
+        
+        # Blend
+        result = Image.blend(original_img.convert("RGB"), heatmap_pil, alpha=0.5)
+        return result
+
+    except Exception as e:
+        print(f"GradCAM failed: {e}")
+        return None
+
+
+def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, input_image):
     if input_image is None:
         raise gr.Error("Please upload an image.")
 
     model, processor, model_type, extra_data = load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes)
+    
+    predictions = {}
+    heatmap = None
 
     if model_type == "hf":
         inputs = processor(images=input_image, return_tensors="pt")
+        
+        # 1. Prediction (No Grad)
         with torch.no_grad():
-            # Handle models that expect 'pixel_values' explicitly vs **inputs
             if "pixel_values" in inputs:
                 try:
                     outputs = model(**inputs)
                 except TypeError:
-                    # Fallback for models that might not accept kwargs or extra args
                     outputs = model(inputs["pixel_values"])
             else:
                 outputs = model(**inputs)
 
-        # Handle Output Type (Object with .logits or Raw Tensor)
         if hasattr(outputs, "logits"):
             logits = outputs.logits
         else:
@@ -277,23 +366,31 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
 
         probabilities = torch.nn.functional.softmax(logits, dim=-1)[0]
         top5_prob, top5_indices = torch.topk(probabilities, 5)
-        return {model.config.id2label[i.item()]: p.item() for i, p in zip(top5_indices, top5_prob)}
-    
+        predictions = {model.config.id2label[i.item()]: p.item() for i, p in zip(top5_indices, top5_prob)}
+        
+        # 2. Heatmap (With Grad)
+        heatmap = get_gradcam(model, inputs, input_image)
+
     elif model_type == "timm":
         input_tensor = processor(input_image).unsqueeze(0)
-        with torch.no_grad(): output = model(input_tensor)
+        
+        # 1. Prediction
+        with torch.no_grad(): 
+            output = model(input_tensor)
+        
         probabilities = torch.nn.functional.softmax(output[0], dim=0)
         top5_prob, top5_indices = torch.topk(probabilities, 5)
         
         class_names = extra_data.get('class_names')
-        results = {}
         for i, p in zip(top5_indices, top5_prob):
             idx = i.item()
             label = class_names[idx] if class_names and idx < len(class_names) else f"Class {idx}"
-            results[label] = p.item()
-        return results
+            predictions[label] = p.item()
+            
+        # 2. Heatmap
+        heatmap = get_gradcam(model, input_tensor, input_image)
 
-    return {}
+    return predictions, heatmap
 
 
 def plot_metrics(mrr, top1, top5):

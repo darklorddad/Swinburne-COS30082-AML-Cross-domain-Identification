@@ -13,12 +13,12 @@ import random
 def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, herbarium_path, input_image):
     # 1. Classify
     try:
-        predictions = classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, input_image)
+        predictions, heatmap = classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, input_image)
     except Exception as e:
         raise gr.Error(f"Prediction failed: {e}")
     
     if not predictions:
-        return None, None
+        return None, None, None
 
     # Get top prediction
     top_class = max(predictions, key=predictions.get)
@@ -60,7 +60,7 @@ def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth
             except OSError:
                 pass
 
-    return predictions, herbarium_images
+    return predictions, herbarium_images, heatmap
 
 # UI Construction
 with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !important}", title="Plant Species Identification") as demo:
@@ -102,6 +102,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
         with gr.Column(scale=1):
             res_label = gr.Label(num_top_classes=5, label="Predictions")
+            res_heatmap = gr.Image(label="Heatmap")
             res_gallery = gr.Gallery(label="Matching herbarium specimens", columns=3, height="auto")
             inf_button = gr.Button("Identify species", variant="primary")
 
@@ -122,7 +123,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
     inf_button.click(
         fn=predict_and_retrieve,
         inputs=[inf_source, inf_model_path, inf_hf_id, inf_pth_file, inf_pth_arch, inf_pth_classes, herbarium_dir, inf_input_image],
-        outputs=[res_label, res_gallery]
+        outputs=[res_label, res_gallery, res_heatmap]
     )
 
     def refresh_models():
