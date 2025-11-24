@@ -383,7 +383,7 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
 
     return predictions, heatmap
 
-def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, herbarium_path, input_image):
+def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, input_image):
     # 1. Classify
     try:
         predictions, heatmap = classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, input_image)
@@ -398,11 +398,17 @@ def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth
     
     # 2. Retrieve Herbarium Images
     herbarium_images = []
-    if herbarium_path and os.path.isdir(herbarium_path):
+    
+    # Look for Dataset/Split-set at the same level as the inference_app folder
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(app_dir)
+    dataset_path = os.path.join(parent_dir, "Dataset", "Split-set")
+
+    if os.path.isdir(dataset_path):
         target_dir = None
         
         # Try exact match
-        possible_path = os.path.join(herbarium_path, top_class)
+        possible_path = os.path.join(dataset_path, top_class)
         if os.path.isdir(possible_path):
             target_dir = possible_path
         else:
@@ -410,10 +416,10 @@ def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth
             def normalize(n): return str(n).lower().replace(' ', '_').replace('-', '_')
             
             norm_top = normalize(top_class)
-            # List all directories in herbarium path
+            # List all directories in dataset path
             try:
-                for d in os.listdir(herbarium_path):
-                    full_d = os.path.join(herbarium_path, d)
+                for d in os.listdir(dataset_path):
+                    full_d = os.path.join(dataset_path, d)
                     if os.path.isdir(full_d):
                         if normalize(d) == norm_top:
                             target_dir = full_d
@@ -422,10 +428,11 @@ def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth
                 pass
         
         if target_dir:
-            # Fetch images
+            # Fetch images with 'herbarium' in name
             try:
                 files = [os.path.join(target_dir, f) for f in os.listdir(target_dir) 
-                         if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff'))]
+                         if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff'))
+                         and 'herbarium' in f.lower()]
                 # Shuffle and pick a few
                 random.shuffle(files)
                 herbarium_images = files[:6] # Show top 6 matches
@@ -466,11 +473,6 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                     inf_pth_classes = gr.Textbox(label="Path to class list (txt/json)")
                     inf_pth_arch = gr.Textbox(label="Architecture name (timm)")
 
-            herbarium_dir = gr.Textbox(
-                label="Herbarium dataset directory",
-                placeholder="Path to folder containing class subfolders of herbarium images"
-            )
-
             inf_input_image = gr.Image(type="pil", label="Upload field image")
 
         with gr.Column(scale=1):
@@ -495,7 +497,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
     inf_button.click(
         fn=predict_and_retrieve,
-        inputs=[inf_source, inf_model_path, inf_hf_id, inf_pth_file, inf_pth_arch, inf_pth_classes, herbarium_dir, inf_input_image],
+        inputs=[inf_source, inf_model_path, inf_hf_id, inf_pth_file, inf_pth_arch, inf_pth_classes, inf_input_image],
         outputs=[res_label, res_gallery, res_heatmap]
     )
 
