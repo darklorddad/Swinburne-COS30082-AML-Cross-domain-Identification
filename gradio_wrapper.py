@@ -113,38 +113,53 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
                 if checkpoints:
                     checkpoint_dir = sorted(checkpoints, key=lambda x: x[0], reverse=True)[0][1]
             
-            # Check for custom model files in parent and copy to checkpoint if needed
+            # Check for custom model files in parent and sync to checkpoint
             try:
-                # Check parent config first for auto_map (source of truth)
-                config_data = {}
                 parent_config_path = os.path.join(model_id, "config.json")
-                if os.path.exists(parent_config_path):
-                    with open(parent_config_path, "r", encoding="utf-8") as f:
-                        config_data = json.load(f)
+                ckpt_config_path = os.path.join(checkpoint_dir, "config.json")
                 
-                # Fallback to checkpoint config
-                if "auto_map" not in config_data:
-                    ckpt_config_path = os.path.join(checkpoint_dir, "config.json")
-                    if os.path.exists(ckpt_config_path):
-                        with open(ckpt_config_path, "r", encoding="utf-8") as f:
-                            config_data = json.load(f)
-
-                if "auto_map" in config_data:
-                    # Identify required files
-                    required_files = set()
-                    for key, value in config_data["auto_map"].items():
-                        # value is like "module.Class"
-                        module_name = value.split(".")[0]
-                        file_name = f"{module_name}.py"
-                        required_files.add(file_name)
+                if os.path.exists(parent_config_path) and os.path.exists(ckpt_config_path):
+                    with open(parent_config_path, "r", encoding="utf-8") as f:
+                        parent_config = json.load(f)
                     
-                    for file_name in required_files:
-                        src = os.path.join(model_id, file_name)
-                        dst = os.path.join(checkpoint_dir, file_name)
-                        if os.path.abspath(src) != os.path.abspath(dst):
+                    # Only proceed if parent has custom mapping
+                    if "auto_map" in parent_config:
+                        with open(ckpt_config_path, "r", encoding="utf-8") as f:
+                            ckpt_config = json.load(f)
+                        
+                        config_changed = False
+                        
+                        # 1. Ensure auto_map exists in checkpoint config
+                        if "auto_map" not in ckpt_config:
+                            print("Injecting auto_map into checkpoint config...")
+                            ckpt_config["auto_map"] = parent_config["auto_map"]
+                            config_changed = True
+                        
+                        # 2. Ensure model_type matches (e.g. custom_arcface)
+                        if ckpt_config.get("model_type") != parent_config.get("model_type"):
+                            print(f"Syncing model_type: {parent_config.get('model_type')}")
+                            ckpt_config["model_type"] = parent_config["model_type"]
+                            config_changed = True
+                            
+                        # 3. Save config if modified
+                        if config_changed:
+                            with open(ckpt_config_path, "w", encoding="utf-8") as f:
+                                json.dump(ckpt_config, f, indent=4)
+
+                        # 4. Copy required Python files
+                        required_files = set()
+                        for key, value in parent_config["auto_map"].items():
+                            # value is like "module.Class"
+                            module_name = value.split(".")[0]
+                            required_files.add(f"{module_name}.py")
+                        
+                        for file_name in required_files:
+                            src = os.path.join(model_id, file_name)
+                            dst = os.path.join(checkpoint_dir, file_name)
                             if os.path.exists(src) and not os.path.exists(dst):
                                 print(f"Copying custom model file {file_name} to checkpoint directory...")
                                 shutil.copy2(src, dst)
+
             except Exception as e:
                 print(f"Warning: Failed to check/copy custom model files: {e}")
 
