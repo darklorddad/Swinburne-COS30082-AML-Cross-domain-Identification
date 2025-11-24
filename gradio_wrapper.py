@@ -208,10 +208,7 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
                 if processor is None:
                     raise ValueError("Could not load preprocessor_config.json and failed to generate fallback.")
 
-                if getattr(model.config, "model_type", "") == "custom_arcface":
-                    model_type = "custom_arcface"
-                else:
-                    model_type = "hf"
+                model_type = "hf"
             except Exception as e:
                 raise gr.Error(f"Error loading local model: {e}")
 
@@ -221,10 +218,7 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
                 processor = AutoImageProcessor.from_pretrained(model_id, trust_remote_code=True)
                 model = AutoModelForImageClassification.from_pretrained(model_id, trust_remote_code=True)
                 
-                if getattr(model.config, "model_type", "") == "custom_arcface":
-                    model_type = "custom_arcface"
-                else:
-                    model_type = "hf"
+                model_type = "hf"
             except Exception as e:
                 raise gr.Error(f"Error loading from Hub: {e}")
 
@@ -308,16 +302,24 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
 
     if model_type == "hf":
         inputs = processor(images=input_image, return_tensors="pt")
-        with torch.no_grad(): outputs = model(**inputs)
-        probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)[0]
-        top5_prob, top5_indices = torch.topk(probabilities, 5)
-        return {model.config.id2label[i.item()]: p.item() for i, p in zip(top5_indices, top5_prob)}
+        with torch.no_grad():
+            # Handle models that expect 'pixel_values' explicitly vs **inputs
+            if "pixel_values" in inputs:
+                try:
+                    outputs = model(**inputs)
+                except TypeError:
+                    # Fallback for models that might not accept kwargs or extra args
+                    outputs = model(inputs["pixel_values"])
+            else:
+                outputs = model(**inputs)
 
-    elif model_type == "custom_arcface":
-        inputs = processor(images=input_image, return_tensors="pt")
-        with torch.no_grad(): 
-            outputs = model(inputs["pixel_values"])
-        probabilities = torch.nn.functional.softmax(outputs, dim=-1)[0]
+        # Handle Output Type (Object with .logits or Raw Tensor)
+        if hasattr(outputs, "logits"):
+            logits = outputs.logits
+        else:
+            logits = outputs
+
+        probabilities = torch.nn.functional.softmax(logits, dim=-1)[0]
         top5_prob, top5_indices = torch.topk(probabilities, 5)
         return {model.config.id2label[i.item()]: p.item() for i, p in zip(top5_indices, top5_prob)}
     
@@ -367,12 +369,27 @@ def extract_features_and_logits(model, processor, batch_images, device, model_ty
     with torch.no_grad():
         if model_type == "hf":
             inputs = processor(images=batch_images, return_tensors="pt").to(device)
-            outputs = model(**inputs, output_hidden_states=True)
-            logits = outputs.logits
             
+            # Try to get hidden states
+            try:
+                outputs = model(**inputs, output_hidden_states=True)
+            except TypeError:
+                # Model might not support output_hidden_states kwarg or **inputs
+                if "pixel_values" in inputs:
+                    outputs = model(inputs["pixel_values"])
+                else:
+                    outputs = model(**inputs)
+
+            # Determine Logits
+            if hasattr(outputs, "logits"):
+                logits = outputs.logits
+            else:
+                logits = outputs
+
+            # Determine Embeddings
             if hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
                 batch_emb_numpy = outputs.pooler_output.cpu().numpy()
-            elif outputs.hidden_states:
+            elif hasattr(outputs, 'hidden_states') and outputs.hidden_states:
                 last_hidden = outputs.hidden_states[-1]
                 if last_hidden.dim() == 4:
                     batch_emb_numpy = last_hidden.mean(dim=[2, 3]).cpu().numpy()
@@ -381,22 +398,10 @@ def extract_features_and_logits(model, processor, batch_images, device, model_ty
                 else:
                     batch_emb_numpy = last_hidden.cpu().numpy()
             else:
+                # LOUD FAILURE for feature extraction
+                print("WARNING: Feature extraction failed! Model does not return hidden_states or pooler_output. Falling back to logits.")
                 batch_emb_numpy = logits.cpu().numpy()
                 fallback_to_logits = True
-
-        elif model_type == "custom_arcface":
-            inputs = processor(images=batch_images, return_tensors="pt").to(device)
-            pixel_values = inputs["pixel_values"]
-            logits = model(pixel_values) # Scaled logits
-            
-            # Embeddings
-            features = model.backbone(pixel_values)
-            if len(features.shape) == 4:
-                features = model.pooling(features).flatten(1)
-            elif len(features.shape) == 3:
-                features = features.mean(dim=1)
-            features = model.bn(features)
-            batch_emb_numpy = torch.nn.functional.normalize(features).cpu().numpy()
 
         elif model_type == "timm":
             tensors = [processor(img) for img in batch_images]
