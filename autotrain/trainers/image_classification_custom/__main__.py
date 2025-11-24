@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import shutil
 
 import numpy as np
 import torch
@@ -275,6 +276,10 @@ def train(config):
     custom_config = {
         "architectures": ["ArcFaceClassifier"],
         "model_type": "custom_arcface",
+        "auto_map": {
+            "AutoConfig": "configuration_arcface.ArcFaceConfig",
+            "AutoModelForImageClassification": "modeling_arcface.ArcFaceClassifier",
+        },
         "backbone": config.model,
         "num_classes": num_classes,
         "arcface_s": config.arcface_s,
@@ -283,6 +288,17 @@ def train(config):
         "id2label": {i: c for i, c in enumerate(classes)},
         "label2id": label2id,
     }
+
+    # Copy modeling files to output directory for AutoModel compatibility
+    # We assume these files are located in the same directory as this script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    for filename in ["configuration_arcface.py", "modeling_arcface.py"]:
+        src = os.path.join(script_dir, filename)
+        dst = os.path.join(config.project_name, filename)
+        if os.path.exists(src):
+            shutil.copy(src, dst)
+        else:
+            logger.warning(f"Could not find {filename} in {script_dir}. AutoModel loading might fail.")
 
     # Write inference notes early
     inference_notes = f"""
