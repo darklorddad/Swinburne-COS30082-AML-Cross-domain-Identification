@@ -1,11 +1,11 @@
 import gradio as gr
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 try:
-    from autotrain.trainers.image_classification_custom.utils import ArcFaceClassifier
     from safetensors.torch import load_file as safe_load_file
 except ImportError:
-    ArcFaceClassifier = None
     safe_load_file = None
 import numpy as np
 from PIL import Image
@@ -28,6 +28,126 @@ from utils import (
     util_plot_training_metrics,
     util_save_training_metrics
 )
+
+# --- Custom Model Classes (Embedded for portability) ---
+class GeM(nn.Module):
+    def __init__(self, p=3, eps=1e-6):
+        super(GeM, self).__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)
+        self.eps = eps
+
+    def forward(self, x):
+        return self.gem(x, p=self.p, eps=self.eps)
+
+    def gem(self, x, p=3, eps=1e-6):
+        return F.avg_pool2d(x.clamp(min=eps).pow(p), (x.size(-2), x.size(-1))).pow(1.0 / p)
+
+    def __repr__(self):
+        return (
+            self.__class__.__name__
+            + "("
+            + "p="
+            + "{:.4f}".format(self.p.data.tolist()[0])
+            + ", "
+            + "eps="
+            + str(self.eps)
+            + ")"
+        )
+
+class ArcFaceClassifier(nn.Module):
+    def __init__(self, model_name, num_classes, s=30.0, m=0.50, pretrained=True):
+        super().__init__()
+        import timm
+        # Create backbone without the classification head (num_classes=0)
+        # global_pool='' ensures we get spatial features for CNNs to apply GeM
+
+        # Sanitize model name for timm
+        if "/" in model_name:
+            model_name = model_name.split("/")[-1]
+
+        candidates = [
+            model_name,
+            model_name.replace("-", "_"),
+            model_name.replace("-", ""),
+        ]
+
+        self.backbone = None
+        for name in candidates:
+            try:
+                self.backbone = timm.create_model(name, pretrained=pretrained, num_classes=0, global_pool="")
+                break
+            except Exception:
+                pass
+
+        if self.backbone is None:
+            raise ValueError(f"Could not find a compatible timm model for {model_name}")
+
+        # Auto-detect feature dimension
+        try:
+            if hasattr(self.backbone, "num_features"):
+                feat_dim = self.backbone.num_features
+            else:
+                # Dummy forward pass to check
+                dummy = torch.randn(1, 3, 224, 224)
+                out = self.backbone(dummy)
+                if len(out.shape) == 4:
+                    feat_dim = out.shape[1]
+                else:
+                    feat_dim = out.shape[-1]
+        except Exception:
+            feat_dim = 768  # Fallback
+
+        self.pooling = GeM()
+        self.bn = nn.BatchNorm1d(feat_dim)
+        self.weight = nn.Parameter(torch.FloatTensor(num_classes, feat_dim))
+        nn.init.xavier_uniform_(self.weight)
+
+        self.s = s
+        self.m = m
+        self.cos_m = math.cos(m)
+        self.sin_m = math.sin(m)
+        self.th = math.cos(math.pi - m)
+        self.mm = math.sin(math.pi - m) * m
+        self.loss_fn = nn.CrossEntropyLoss()
+
+    def forward(self, pixel_values, labels=None):
+        features = self.backbone(pixel_values)
+
+        # Handle different backbone output shapes
+        if len(features.shape) == 4:  # CNNs: (B, C, H, W)
+            features = self.pooling(features).flatten(1)
+        elif len(features.shape) == 3:  # Transformers: (B, N, C)
+            features = features.mean(dim=1)
+        elif len(features.shape) == 2:  # Already pooled (B, C)
+            pass
+
+        features = self.bn(features)
+
+        # Calculate logits (cosine similarity)
+        cosine = F.linear(F.normalize(features), F.normalize(self.weight))
+
+        # If labels are provided (Training or Eval)
+        if labels is not None:
+            if self.training:
+                # Training: ArcFace Logic with Margin
+                sine = torch.sqrt((1.0 - torch.pow(cosine, 2)).clamp(0, 1))
+                phi = cosine * self.cos_m - sine * self.sin_m
+                phi = torch.where(cosine > self.th, phi, cosine - self.mm)
+
+                one_hot = torch.zeros(cosine.size(), device=pixel_values.device)
+                one_hot.scatter_(1, labels.view(-1, 1).long(), 1)
+                output = (one_hot * phi) + ((1.0 - one_hot) * cosine)
+                output *= self.s
+            else:
+                # Eval: Standard Logits (scaled)
+                output = cosine * self.s
+
+            loss = self.loss_fn(output, labels)
+            return {"loss": loss, "logits": output}
+
+        # Inference (No labels): Return scaled logits
+        return cosine * self.s
+
 
 def get_placeholder_plot():
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -129,14 +249,12 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
                 processor = AutoImageProcessor.from_pretrained(model_id, local_files_only=True)
                 
                 if is_custom_arcface:
-                    if ArcFaceClassifier is None:
-                        raise ImportError("ArcFaceClassifier could not be imported. Ensure autotrain is installed.")
-                    
                     model = ArcFaceClassifier(
                         model_name=custom_cfg["backbone"],
                         num_classes=custom_cfg["num_classes"],
                         s=custom_cfg["arcface_s"],
-                        m=custom_cfg["arcface_m"]
+                        m=custom_cfg["arcface_m"],
+                        pretrained=False
                     )
                     
                     # Load weights
