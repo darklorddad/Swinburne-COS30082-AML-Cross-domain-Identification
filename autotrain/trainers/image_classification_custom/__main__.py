@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 
+import numpy as np
 import torch
 from accelerate.state import PartialState
 from safetensors.torch import save_file as safe_save_file
@@ -49,8 +50,8 @@ class CustomTrainer(Trainer):
         data_collator = self.data_collator
 
         # Access the underlying HF dataset from ImageClassificationDataset wrapper
-        labels = train_dataset.data[train_dataset.config.target_column]
-        sample_weights = [self.class_weights[l] for l in labels]
+        labels = train_dataset.data.with_format("numpy")[train_dataset.config.target_column]
+        sample_weights = self.class_weights[torch.from_numpy(labels)]
 
         sampler = torch.utils.data.WeightedRandomSampler(
             weights=sample_weights, num_samples=len(sample_weights), replacement=True
@@ -250,6 +251,7 @@ def train(config):
     warmup_args_dict = training_args_dict.copy()
     warmup_args_dict["num_train_epochs"] = config.warmup_epochs
     warmup_args_dict["learning_rate"] = config.head_lr
+    warmup_args_dict["output_dir"] = os.path.join(config.project_name, "warmup")
 
     # Calculate class weights for sampler if enabled
     class_weights = None
