@@ -280,10 +280,16 @@ def get_gradcam(model, input_tensor, original_img):
         model.zero_grad()
         
         # Handle input dict vs tensor
-        if isinstance(input_tensor, dict):
-            output = model(**input_tensor)
-        else:
+        if isinstance(input_tensor, torch.Tensor):
             output = model(input_tensor)
+        else:
+            try:
+                output = model(**input_tensor)
+            except TypeError:
+                if "pixel_values" in input_tensor:
+                    output = model(input_tensor["pixel_values"])
+                else:
+                    raise
 
         if hasattr(output, "logits"):
             logits = output.logits
