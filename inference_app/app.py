@@ -477,8 +477,8 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
         with gr.Column(scale=1):
             res_label = gr.Label(num_top_classes=5, label="Predictions")
-            res_heatmap = gr.Image(label="Heatmap")
             res_gallery = gr.Gallery(label="Matching herbarium specimens", columns=3, height="auto")
+            res_heatmap = gr.Image(label="Heatmap")
             inf_button = gr.Button("Identify species", variant="primary")
 
     # Event Handlers
