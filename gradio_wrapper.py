@@ -98,20 +98,26 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
                 checkpoint_dir = model_id
                 model_id = os.path.dirname(model_id) # Root for processor
             else:
-                # Find latest checkpoint
+                # Check if root has weights
+                has_weights = os.path.exists(os.path.join(model_id, "model.safetensors")) or \
+                              os.path.exists(os.path.join(model_id, "pytorch_model.bin"))
+                
                 checkpoint_dir = model_id
-                checkpoints = []
-                if os.path.isdir(model_id):
-                    for item in os.listdir(model_id):
-                        path = os.path.join(model_id, item)
-                        if os.path.isdir(path) and item.startswith('checkpoint-'):
-                            try:
-                                step = int(item.split('-')[-1])
-                                checkpoints.append((step, path))
-                            except (ValueError, IndexError):
-                                continue
-                if checkpoints:
-                    checkpoint_dir = sorted(checkpoints, key=lambda x: x[0], reverse=True)[0][1]
+                
+                if not has_weights:
+                    # Find latest checkpoint
+                    checkpoints = []
+                    if os.path.isdir(model_id):
+                        for item in os.listdir(model_id):
+                            path = os.path.join(model_id, item)
+                            if os.path.isdir(path) and item.startswith('checkpoint-'):
+                                try:
+                                    step = int(item.split('-')[-1])
+                                    checkpoints.append((step, path))
+                                except (ValueError, IndexError):
+                                    continue
+                    if checkpoints:
+                        checkpoint_dir = sorted(checkpoints, key=lambda x: x[0], reverse=True)[0][1]
             
             # Check for custom model files in parent and sync to checkpoint
             try:
@@ -1493,8 +1499,8 @@ def check_dataset_splittability(source_dir, split_type, train_ratio, val_ratio, 
 
 def get_model_choices():
     """
-    Finds model directories, identifies the latest checkpoint in each, and returns
-    a list of (display_name, path_to_checkpoint) tuples for the dropdown.
+    Finds model directories. Prioritises the root directory if it contains model weights.
+    Otherwise, falls back to the latest checkpoint.
     """
     choices = []
     try:
@@ -1503,6 +1509,16 @@ def get_model_choices():
 
         for model_dir_name in model_parent_dirs:
             model_dir_path = os.path.join(app_dir, model_dir_name)
+            
+            # Check for weights in root
+            has_weights = os.path.exists(os.path.join(model_dir_path, "model.safetensors")) or \
+                          os.path.exists(os.path.join(model_dir_path, "pytorch_model.bin"))
+            
+            if has_weights:
+                choices.append((model_dir_name, model_dir_path))
+                continue
+
+            # Fallback to checkpoints
             checkpoints = []
             for item in os.listdir(model_dir_path):
                 path = os.path.join(model_dir_path, item)
@@ -1516,13 +1532,8 @@ def get_model_choices():
             if checkpoints:
                 latest_checkpoint = sorted(checkpoints, key=lambda x: x[0], reverse=True)[0]
                 step, path = latest_checkpoint
-                display_name = model_dir_name
+                display_name = f"{model_dir_name} (ckpt-{step})"
                 choices.append((display_name, path))
-            else:
-                # If no checkpoints, maybe the model is in the root. Add it as a choice.
-                # Check for a config file to be sure it's a model directory.
-                if os.path.exists(os.path.join(model_dir_path, 'config.json')):
-                    choices.append((model_dir_name, model_dir_path))
 
     except FileNotFoundError:
         print("Warning: Could not find the app directory to scan for models.")
