@@ -72,14 +72,11 @@ def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth
     return result_text, herbarium_images
 
 # UI Construction
-with gr.Blocks(theme=gr.themes.Soft(), title="Plant Species Identification") as demo:
-    gr.Markdown("# Plant Species Identification System")
-    gr.Markdown("Upload a field image to identify the species and view matching herbarium specimens.")
+with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !important}", title="Plant Species Identification") as demo:
     
     with gr.Row():
         with gr.Column(scale=1):
             with gr.Group():
-                gr.Markdown("### 1. Model Settings")
                 inf_source = gr.Radio(
                     choices=["Local", "Hugging Face Hub", "Local .pth"],
                     value="Local",
@@ -105,22 +102,17 @@ with gr.Blocks(theme=gr.themes.Soft(), title="Plant Species Identification") as 
                     inf_pth_classes = gr.Textbox(label="Path to class list (txt/json)")
                     inf_pth_arch = gr.Textbox(label="Architecture name (timm)")
 
-            with gr.Group():
-                gr.Markdown("### 2. Reference Data")
-                herbarium_dir = gr.Textbox(
-                    label="Herbarium Dataset Directory",
-                    placeholder="Path to folder containing class subfolders of herbarium images"
-                )
+            herbarium_dir = gr.Textbox(
+                label="Herbarium Dataset Directory",
+                placeholder="Path to folder containing class subfolders of herbarium images"
+            )
 
-            with gr.Group():
-                gr.Markdown("### 3. Input")
-                inf_input_image = gr.Image(type="pil", label="Upload Field Image")
-                inf_button = gr.Button("Identify Species", variant="primary")
+            inf_input_image = gr.Image(type="pil", label="Upload Field Image")
 
         with gr.Column(scale=1):
-            gr.Markdown("### Results")
             res_text = gr.Textbox(label="Prediction", interactive=False)
             res_gallery = gr.Gallery(label="Matching Herbarium Specimens", columns=3, height="auto")
+            inf_button = gr.Button("Identify Species", variant="primary")
 
     # Event Handlers
     def update_inf_inputs(source):
