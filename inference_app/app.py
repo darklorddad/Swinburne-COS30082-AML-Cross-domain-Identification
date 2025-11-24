@@ -1034,7 +1034,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         # 2. Test Set & Run
         with gr.Column(visible=True) as eval_run_container:
             with gr.Accordion("Settings", open=False):
-                eval_test_dir = gr.Textbox(label="Path to test set", value=default_test_dir)
+                eval_test_dir = gr.Textbox(label="Path to test set", value=default_test_dir, visible=False)
                 eval_mode = gr.Radio(["Standard", "Prototype Retrieval"], label="Evaluation Mode", value="Standard")
                 eval_ref_dir = gr.Textbox(label="Path to reference set (for prototypes)", value=default_ref_dir, visible=False)
                 eval_batch_size = gr.Slider(minimum=1, maximum=128, value=32, step=1, label="Batch size")
