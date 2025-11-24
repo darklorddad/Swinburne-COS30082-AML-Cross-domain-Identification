@@ -428,24 +428,162 @@ def plot_metrics(mrr, top1, top5):
     return fig
 
 
-def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, test_dir, batch_size=32, perplexity=30):
+def extract_features_and_logits(model, processor, batch_images, device, model_type):
+    batch_emb_numpy = None
+    logits = None
+    fallback_to_logits = False
+
+    with torch.no_grad():
+        if model_type == "hf":
+            inputs = processor(images=batch_images, return_tensors="pt").to(device)
+            outputs = model(**inputs, output_hidden_states=True)
+            logits = outputs.logits
+            
+            if hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
+                batch_emb_numpy = outputs.pooler_output.cpu().numpy()
+            elif outputs.hidden_states:
+                last_hidden = outputs.hidden_states[-1]
+                if last_hidden.dim() == 4:
+                    batch_emb_numpy = last_hidden.mean(dim=[2, 3]).cpu().numpy()
+                elif last_hidden.dim() == 3:
+                    batch_emb_numpy = last_hidden.mean(dim=1).cpu().numpy()
+                else:
+                    batch_emb_numpy = last_hidden.cpu().numpy()
+            else:
+                batch_emb_numpy = logits.cpu().numpy()
+                fallback_to_logits = True
+
+        elif model_type == "custom_arcface":
+            inputs = processor(images=batch_images, return_tensors="pt").to(device)
+            pixel_values = inputs["pixel_values"]
+            logits = model(pixel_values) # Scaled logits
+            
+            # Embeddings
+            features = model.backbone(pixel_values)
+            if len(features.shape) == 4:
+                features = model.pooling(features).flatten(1)
+            elif len(features.shape) == 3:
+                features = features.mean(dim=1)
+            features = model.bn(features)
+            batch_emb_numpy = torch.nn.functional.normalize(features).cpu().numpy()
+
+        elif model_type == "timm":
+            tensors = [processor(img) for img in batch_images]
+            input_tensor = torch.stack(tensors).to(device)
+            try:
+                features = model.forward_features(input_tensor)
+                if features.dim() == 4:
+                    batch_emb_numpy = features.mean(dim=[2, 3]).cpu().numpy()
+                elif features.dim() == 3:
+                    batch_emb_numpy = features.mean(dim=1).cpu().numpy()
+                else:
+                    batch_emb_numpy = features.cpu().numpy()
+                
+                if hasattr(model, 'forward_head'):
+                    logits = model.forward_head(features)
+                else:
+                    logits = model(input_tensor)
+            except Exception:
+                logits = model(input_tensor)
+                batch_emb_numpy = logits.cpu().numpy()
+                fallback_to_logits = True
+                
+    return batch_emb_numpy, logits, fallback_to_logits
+
+
+def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes, test_dir, batch_size=32, perplexity=30, eval_mode="Standard", reference_dir=None):
     if not test_dir or not os.path.exists(test_dir):
         raise gr.Error("Please provide a valid test directory.")
 
     model, processor, model_type, extra_data = load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_classes)
     
-    # Prepare labels mapping
-    id2label = {}
-    label2id = {}
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    model.eval()
+
+    # --- PROTOTYPE RETRIEVAL SETUP ---
+    prototypes_tensor = None
     
-    if model_type == "hf" or model_type == "custom_arcface":
-        id2label = model.config.id2label
-        label2id = {v: k for k, v in id2label.items()}
-    elif model_type == "timm":
-        class_names = extra_data.get('class_names')
-        if class_names:
-            id2label = {i: name for i, name in enumerate(class_names)}
-            label2id = {name: i for i, name in enumerate(class_names)}
+    if eval_mode == "Prototype Retrieval":
+        if not reference_dir or not os.path.exists(reference_dir):
+            raise gr.Error("Please provide a valid reference directory for prototype retrieval.")
+        
+        gr.Info("Computing prototypes from reference set...")
+        
+        # Scan reference directory
+        ref_paths = []
+        ref_labels = []
+        for root, dirs, files in os.walk(reference_dir):
+            if os.path.abspath(root) == os.path.abspath(reference_dir): continue
+            class_name = os.path.basename(root)
+            for f in files:
+                if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+                    ref_paths.append(os.path.join(root, f))
+                    ref_labels.append(class_name)
+        
+        if not ref_paths:
+            raise gr.Error("No images found in reference directory.")
+
+        # Compute embeddings for reference set
+        ref_embeddings = []
+        ref_labels_processed = []
+        
+        for i in range(0, len(ref_paths), batch_size):
+            batch_p = ref_paths[i : i + batch_size]
+            batch_l = ref_labels[i : i + batch_size]
+            
+            batch_imgs = []
+            valid_l = []
+            for idx, p in enumerate(batch_p):
+                try:
+                    img = Image.open(p).convert("RGB")
+                    batch_imgs.append(img)
+                    valid_l.append(batch_l[idx])
+                except Exception:
+                    pass
+            
+            if not batch_imgs: continue
+            
+            feats, _, _ = extract_features_and_logits(model, processor, batch_imgs, device, model_type)
+            if feats is not None:
+                ref_embeddings.extend(feats)
+                ref_labels_processed.extend(valid_l)
+        
+        if not ref_embeddings:
+            raise gr.Error("Failed to extract features from reference set.")
+
+        # Compute Prototypes (Mean Embedding per Class)
+        ref_embeddings = np.array(ref_embeddings)
+        unique_classes = sorted(list(set(ref_labels_processed)))
+        
+        prototypes = []
+        for cls in unique_classes:
+            indices = [i for i, l in enumerate(ref_labels_processed) if l == cls]
+            class_embs = ref_embeddings[indices]
+            # Mean and Normalize
+            proto = np.mean(class_embs, axis=0)
+            proto = proto / (np.linalg.norm(proto) + 1e-9)
+            prototypes.append(proto)
+            
+        prototypes_tensor = torch.tensor(np.array(prototypes), device=device, dtype=torch.float)
+        
+        # Override label mapping for evaluation
+        id2label = {i: name for i, name in enumerate(unique_classes)}
+        label2id = {name: i for i, name in enumerate(unique_classes)}
+        
+    else:
+        # Standard Mode: Use Model's Classes
+        id2label = {}
+        label2id = {}
+        
+        if model_type == "hf" or model_type == "custom_arcface":
+            id2label = model.config.id2label
+            label2id = {v: k for k, v in id2label.items()}
+        elif model_type == "timm":
+            class_names = extra_data.get('class_names')
+            if class_names:
+                id2label = {i: name for i, name in enumerate(class_names)}
+                label2id = {name: i for i, name in enumerate(class_names)}
     
     # Scan directory structure for images
     # Expected structure: test_dir/class_name/image.jpg
@@ -523,10 +661,6 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     embeddings_path = embeddings_file.name
     embeddings_file.close()
     
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    model.eval()
-
     progress = gr.Progress()
     
     try:
@@ -550,80 +684,38 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
                 if not batch_images: continue
 
                 # Inference
-                with torch.no_grad():
-                    batch_emb_numpy = None
+                batch_emb_numpy, logits, fallback = extract_features_and_logits(model, processor, batch_images, device, model_type)
+                
+                if fallback:
+                    fallback_to_logits = True
+
+                # Save embeddings to disk
+                if batch_emb_numpy is not None:
+                    np.save(f_emb, batch_emb_numpy)
+
+                # Determine Logits for Metrics
+                if eval_mode == "Prototype Retrieval" and prototypes_tensor is not None and batch_emb_numpy is not None:
+                    # Cosine Similarity: (B, D) @ (C, D).T -> (B, C)
+                    # Ensure embeddings are normalized
+                    feats_t = torch.tensor(batch_emb_numpy, device=device)
+                    feats_t = torch.nn.functional.normalize(feats_t, dim=1)
                     
-                    if model_type == "hf":
-                        inputs = processor(images=batch_images, return_tensors="pt").to(device)
-                        outputs = model(**inputs, output_hidden_states=True)
-                        logits = outputs.logits
-                        
-                        # Robust Feature Extraction
-                        if hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
-                            batch_emb_numpy = outputs.pooler_output.cpu().numpy()
-                        elif outputs.hidden_states:
-                            last_hidden = outputs.hidden_states[-1]
-                            if last_hidden.dim() == 4: # [B, C, H, W]
-                                batch_emb_numpy = last_hidden.mean(dim=[2, 3]).cpu().numpy()
-                            elif last_hidden.dim() == 3: # [B, Seq, Dim]
-                                batch_emb_numpy = last_hidden.mean(dim=1).cpu().numpy()
-                            else:
-                                batch_emb_numpy = last_hidden.cpu().numpy()
-                        else:
-                            batch_emb_numpy = logits.cpu().numpy()
-                            fallback_to_logits = True
-
-                    elif model_type == "custom_arcface":
-                        inputs = processor(images=batch_images, return_tensors="pt").to(device)
-                        pixel_values = inputs["pixel_values"]
-                        
-                        # Get logits
-                        logits = model(pixel_values)
-                        
-                        # Get embeddings for t-SNE
-                        # Replicate forward pass up to normalization
-                        features = model.backbone(pixel_values)
-                        if len(features.shape) == 4:
-                            features = model.pooling(features).flatten(1)
-                        elif len(features.shape) == 3:
-                            features = features.mean(dim=1)
-                        
-                        features = model.bn(features)
-                        batch_emb_numpy = torch.nn.functional.normalize(features).cpu().numpy()
-
-                    elif model_type == "timm":
-                        tensors = [processor(img) for img in batch_images]
-                        input_tensor = torch.stack(tensors).to(device)
-                        
-                        try:
-                            # Try to get features
-                            features = model.forward_features(input_tensor)
-                            
-                            # Robust Pooling
-                            if features.dim() == 4: # [B, C, H, W]
-                                batch_emb_numpy = features.mean(dim=[2, 3]).cpu().numpy()
-                            elif features.dim() == 3: # [B, Seq, Dim]
-                                batch_emb_numpy = features.mean(dim=1).cpu().numpy()
-                            else:
-                                batch_emb_numpy = features.cpu().numpy()
-                            
-                            # Get logits
-                            if hasattr(model, 'forward_head'):
-                                logits = model.forward_head(features)
-                            else:
-                                logits = model(input_tensor)
-                        except Exception:
-                            # Fallback
-                            logits = model(input_tensor)
-                            batch_emb_numpy = logits.cpu().numpy()
-                            fallback_to_logits = True
-
-                    # Save embeddings to disk
-                    if batch_emb_numpy is not None:
-                        np.save(f_emb, batch_emb_numpy)
+                    # Prototypes are already normalized
+                    sim_logits = torch.matmul(feats_t, prototypes_tensor.t())
+                    
+                    # Use similarity as logits
+                    final_logits = sim_logits
+                else:
+                    # Standard Mode
+                    if isinstance(logits, torch.Tensor):
+                        final_logits = logits
+                    else:
+                        final_logits = torch.tensor(logits, device=device)
 
                 # Metrics Calculation
-                probs = torch.nn.functional.softmax(logits, dim=1)
+                # For cosine similarity, higher is better, so softmax works (or just argsort directly)
+                # Softmax is monotonic, so argsort order is preserved.
+                probs = torch.nn.functional.softmax(final_logits, dim=1)
                 sorted_indices = torch.argsort(probs, descending=True, dim=1)
                 
                 for j, valid_idx in enumerate(valid_indices):
