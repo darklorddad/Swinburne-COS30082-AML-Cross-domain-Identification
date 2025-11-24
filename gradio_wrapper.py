@@ -324,7 +324,11 @@ def extract_features_and_logits(model, processor, batch_images, device, model_ty
 
     with torch.no_grad():
         if model_type == "hf":
-            inputs = processor(images=batch_images, return_tensors="pt").to(device)
+            inputs = processor(images=batch_images, return_tensors="pt")
+            if hasattr(inputs, "to"):
+                inputs = inputs.to(device)
+            else:
+                inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
             
             # Try to get hidden states
             try:
