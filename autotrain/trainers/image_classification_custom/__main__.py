@@ -89,6 +89,14 @@ class CustomTrainer(Trainer):
         if self.image_processor:
             self.image_processor.save_pretrained(output_dir)
 
+        # Copy modeling files to output directory (essential for checkpoints)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        for filename in ["configuration_arcface.py", "modeling_arcface.py"]:
+            src = os.path.join(script_dir, filename)
+            dst = os.path.join(output_dir, filename)
+            if os.path.exists(src):
+                shutil.copy(src, dst)
+
 
 def parse_args():
     # get training_config.json from the end user
