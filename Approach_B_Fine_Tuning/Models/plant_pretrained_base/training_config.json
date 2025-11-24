@@ -2,15 +2,15 @@
     "model_type": "plant_pretrained_base",
     "model_name": "vit_base_patch14_reg4_dinov2.lvd142m",
     "num_classes": 100,
-    "epochs_trained": 5,
-    "best_val_accuracy": 2.85,
+    "epochs_trained": 60,
+    "best_val_accuracy": 29.775,
     "hyperparameters": {
         "model_type": "plant_pretrained_base",
         "train_dir": "Dataset/balanced_train",
         "val_dir": "Dataset/validation",
         "plant_model_path": "Models/pretrained/model_best.pth.tar",
         "output_dir": "Approach_B_Fine_Tuning/Models/plant_pretrained_base",
-        "epochs": 5,
+        "epochs": 60,
         "batch_size": 16,
         "gradient_accumulation_steps": 2,
         "image_size": 518,
@@ -26,5 +26,5 @@
         "profile_steps": 50,
         "use_gpu_aug": false
     },
-    "training_time_seconds": 4275.209093332291
+    "training_time_seconds": 66080.66037726402
 }

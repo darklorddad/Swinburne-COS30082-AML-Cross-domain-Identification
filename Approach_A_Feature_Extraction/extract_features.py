@@ -85,7 +85,7 @@ def get_model_config(model_type):
         },
         'plant_pretrained_base': {
             'model_name': 'vit_base_patch14_reg4_dinov2.lvd142m',
-            'pretrained': False,  # We'll load custom weights
+            'pretrained': False,  # Load custom weights
             'feature_dim': 768
         }
     }

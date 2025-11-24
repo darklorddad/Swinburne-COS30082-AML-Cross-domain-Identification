@@ -2,7 +2,7 @@
 METRICS SUMMARY
 ============================================================
 
-best_val_accuracy: 2.8500
-final_train_loss: 4.4829
-final_val_loss: 4.4800
-training_time_seconds: 4275.2091
+best_val_accuracy: 29.7750
+final_train_loss: 3.1855
+final_val_loss: 3.2164
+training_time_seconds: 66080.6604

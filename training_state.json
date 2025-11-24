@@ -1,5 +1,5 @@
 {
-  "last_updated": "2025-11-23T14:18:33.669231",
+  "last_updated": "2025-11-24T14:08:56.072665",
   "approach_a": {
     "features": {
       "plant_pretrained_base": {
@@ -125,8 +125,8 @@
   "approach_b": {
     "models": {
       "plant_pretrained_base": {
-        "status": "in_progress",
-        "last_run": "2025-11-23T10:12:26.778144",
+        "status": "completed",
+        "last_run": "2025-11-23T19:47:21.677189",
         "error": null,
         "metrics": {}
       },
