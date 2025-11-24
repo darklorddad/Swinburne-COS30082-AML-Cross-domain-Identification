@@ -18,13 +18,10 @@ def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth
         raise gr.Error(f"Prediction failed: {e}")
     
     if not predictions:
-        return "No predictions", None
+        return None, None
 
     # Get top prediction
     top_class = max(predictions, key=predictions.get)
-    confidence = predictions[top_class]
-    
-    result_text = f"Predicted Species: {top_class}\nConfidence: {confidence:.2%}"
     
     # 2. Retrieve Herbarium Images
     herbarium_images = []
@@ -60,16 +57,10 @@ def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth
                 random.shuffle(files)
                 herbarium_images = files[:6] # Show top 6 matches
                 
-                if not herbarium_images:
-                    result_text += "\n\n(Class folder found in herbarium dataset, but no images inside)"
             except OSError:
-                result_text += "\n\n(Error reading class folder)"
-        else:
-             result_text += f"\n\n(No matching folder found in herbarium dataset for '{top_class}')"
-    elif herbarium_path:
-        result_text += "\n\n(Herbarium path provided is invalid)"
+                pass
 
-    return result_text, herbarium_images
+    return predictions, herbarium_images
 
 # UI Construction
 with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !important}", title="Plant Species Identification") as demo:
@@ -103,16 +94,16 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                     inf_pth_arch = gr.Textbox(label="Architecture name (timm)")
 
             herbarium_dir = gr.Textbox(
-                label="Herbarium Dataset Directory",
+                label="Herbarium dataset directory",
                 placeholder="Path to folder containing class subfolders of herbarium images"
             )
 
-            inf_input_image = gr.Image(type="pil", label="Upload Field Image")
+            inf_input_image = gr.Image(type="pil", label="Upload field image")
 
         with gr.Column(scale=1):
-            res_text = gr.Textbox(label="Prediction", interactive=False)
-            res_gallery = gr.Gallery(label="Matching Herbarium Specimens", columns=3, height="auto")
-            inf_button = gr.Button("Identify Species", variant="primary")
+            res_label = gr.Label(num_top_classes=5, label="Predictions")
+            res_gallery = gr.Gallery(label="Matching herbarium specimens", columns=3, height="auto")
+            inf_button = gr.Button("Identify species", variant="primary")
 
     # Event Handlers
     def update_inf_inputs(source):
@@ -131,7 +122,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
     inf_button.click(
         fn=predict_and_retrieve,
         inputs=[inf_source, inf_model_path, inf_hf_id, inf_pth_file, inf_pth_arch, inf_pth_classes, herbarium_dir, inf_input_image],
-        outputs=[res_text, res_gallery]
+        outputs=[res_label, res_gallery]
     )
 
     def refresh_models():
