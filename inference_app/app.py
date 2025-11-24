@@ -893,10 +893,15 @@ def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth
     # 2. Retrieve Herbarium Images
     herbarium_images = []
     
-    # Look for Dataset/Split-set at the same level as the inference_app folder
+    # Look for Dataset/Split-set
     app_dir = os.path.dirname(os.path.abspath(__file__))
-    parent_dir = os.path.dirname(app_dir)
-    dataset_path = os.path.join(parent_dir, "Dataset", "Split-set")
+    dataset_root = os.path.join(app_dir, "Dataset")
+    
+    if not os.path.isdir(dataset_root):
+        parent_dir = os.path.dirname(app_dir)
+        dataset_root = os.path.join(parent_dir, "Dataset")
+        
+    dataset_path = os.path.join(dataset_root, "Split-set")
 
     if os.path.isdir(dataset_path):
         target_dir = None
@@ -938,9 +943,14 @@ def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth
 
 # UI Construction
 app_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(app_dir)
-default_test_dir = os.path.join(parent_dir, "Dataset", "Test-set")
-default_ref_dir = os.path.join(parent_dir, "Dataset", "Split-set")
+dataset_root = os.path.join(app_dir, "Dataset")
+
+if not os.path.isdir(dataset_root):
+    parent_dir = os.path.dirname(app_dir)
+    dataset_root = os.path.join(parent_dir, "Dataset")
+
+default_test_dir = os.path.join(dataset_root, "Test-set")
+default_ref_dir = os.path.join(dataset_root, "Split-set")
 
 with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !important}", title="Plant Species Identification") as demo:
     
