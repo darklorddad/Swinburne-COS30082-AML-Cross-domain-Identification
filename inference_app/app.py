@@ -74,7 +74,7 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
     extra_data = {} # e.g. class_names for timm
 
     # --- CASE 1: Local or Hugging Face Hub ---
-    if source_type in ["Local", "Hugging Face Hub"]:
+    if source_type in ["Local", "Hugging Face hub"]:
         model_id = local_path if source_type == "Local" else hf_id
         
         if not model_id:
@@ -531,7 +531,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     # --- PROTOTYPE RETRIEVAL SETUP ---
     prototypes_tensor = None
     
-    if eval_mode == "Prototype Retrieval":
+    if eval_mode == "Prototype retrieval":
         if not reference_dir or not os.path.exists(reference_dir):
             raise gr.Error("Please provide a valid reference directory for prototype retrieval.")
         
@@ -721,7 +721,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
                     np.save(f_emb, batch_emb_numpy)
 
                 # Determine Logits for Metrics
-                if eval_mode == "Prototype Retrieval" and prototypes_tensor is not None and batch_emb_numpy is not None:
+                if eval_mode == "Prototype retrieval" and prototypes_tensor is not None and batch_emb_numpy is not None:
                     # Cosine Similarity: (B, D) @ (C, D).T -> (B, C)
                     # Ensure embeddings are normalized
                     feats_t = torch.tensor(batch_emb_numpy, device=device)
@@ -959,7 +959,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             with gr.Column(scale=1):
                 with gr.Group():
                     inf_source = gr.Radio(
-                        choices=["Local", "Hugging Face Hub", "Local .pth"],
+                        choices=["Local", "Hugging Face hub", "Local .pth"],
                         value="Local",
                         label="Model source"
                     )
@@ -995,7 +995,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         def update_inf_inputs(source):
             return (
                 gr.update(visible=(source == "Local")),
-                gr.update(visible=(source == "Hugging Face Hub")),
+                gr.update(visible=(source == "Hugging Face hub")),
                 gr.update(visible=(source == "Local .pth"))
             )
 
@@ -1017,7 +1017,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             with gr.Column():
                 with gr.Group():
                     eval_source = gr.Radio(
-                        choices=["Local", "Hugging Face Hub", "Local .pth"],
+                        choices=["Local", "Hugging Face hub", "Local .pth"],
                         value="Local",
                         label="Model source"
                     )
@@ -1044,18 +1044,10 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         # 2. Test Set & Run
         with gr.Column(visible=True) as eval_run_container:
             with gr.Accordion("Settings", open=False):
-                eval_mode = gr.Radio(["Standard", "Prototype Retrieval"], label="Evaluation Mode", value="Standard")
+                eval_mode = gr.Radio(["Standard", "Prototype retrieval"], label="Evaluation mode", value="Standard")
                 eval_batch_size = gr.Slider(minimum=1, maximum=128, value=32, step=1, label="Batch size")
-                eval_perplexity = gr.Slider(minimum=2, maximum=100, value=30, step=1, label="t-SNE Perplexity")
+                eval_perplexity = gr.Slider(minimum=2, maximum=100, value=15, step=1, label="t-SNE perplexity")
             eval_button = gr.Button("Run evaluation", variant="primary")
-
-        # 3. Save Evaluation (Hidden until run)
-        with gr.Column(visible=False) as eval_save_container:
-            with gr.Accordion("Save evaluation", open=False):
-                with gr.Column():
-                    eval_export_dir = gr.Textbox(label="Export directory")
-                    eval_export_btn = gr.Button("Save", variant="primary")
-                    eval_export_status = gr.Textbox(label="Status", interactive=False)
 
         # 4. Results (Hidden until run)
         eval_results_state = gr.State()
