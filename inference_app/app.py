@@ -1060,7 +1060,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         # Logic for Evaluation
         def update_eval_inputs(source):
             is_local = (source == "Local")
-            is_hf = (source == "Hugging Face Hub")
+            is_hf = (source == "Hugging Face hub")
             is_pth = (source == "Local .pth")
             
             return (
@@ -1076,8 +1076,8 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         )
 
         eval_button.click(
-            fn=lambda: (gr.update(visible=True), gr.update(visible=True)),
-            outputs=[eval_results_container, eval_save_container]
+            fn=lambda: gr.update(visible=True),
+            outputs=[eval_results_container]
         ).then(
             fn=lambda src, path, hf, pth, arch, cls, bs, perp, mode: evaluate_test_set(
                 src, path, hf, pth, arch, cls, 
@@ -1087,12 +1087,6 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             ),
             inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file, eval_pth_arch, eval_pth_classes, eval_batch_size, eval_perplexity, eval_mode],
             outputs=[eval_plot_tsne, eval_plot_metrics, eval_results_state]
-        )
-        
-        eval_export_btn.click(
-            fn=save_evaluation_results,
-            inputs=[eval_results_state, eval_export_dir],
-            outputs=[eval_export_status]
         )
 
     def refresh_models():
