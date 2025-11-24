@@ -1,5 +1,5 @@
 import gradio as gr
-from transformers import AutoImageProcessor, AutoModelForImageClassification
+from transformers import AutoImageProcessor, AutoModelForImageClassification, AutoConfig
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -115,34 +115,46 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
             
             # Check for custom model files in parent and copy to checkpoint if needed
             try:
-                config_path = os.path.join(checkpoint_dir, "config.json")
-                if os.path.exists(config_path):
-                    with open(config_path, "r", encoding="utf-8") as f:
+                # Check parent config first for auto_map (source of truth)
+                config_data = {}
+                parent_config_path = os.path.join(model_id, "config.json")
+                if os.path.exists(parent_config_path):
+                    with open(parent_config_path, "r", encoding="utf-8") as f:
                         config_data = json.load(f)
+                
+                # Fallback to checkpoint config
+                if "auto_map" not in config_data:
+                    ckpt_config_path = os.path.join(checkpoint_dir, "config.json")
+                    if os.path.exists(ckpt_config_path):
+                        with open(ckpt_config_path, "r", encoding="utf-8") as f:
+                            config_data = json.load(f)
+
+                if "auto_map" in config_data:
+                    # Identify required files
+                    required_files = set()
+                    for key, value in config_data["auto_map"].items():
+                        # value is like "module.Class"
+                        module_name = value.split(".")[0]
+                        file_name = f"{module_name}.py"
+                        required_files.add(file_name)
                     
-                    if "auto_map" in config_data:
-                        # Identify required files
-                        required_files = set()
-                        for key, value in config_data["auto_map"].items():
-                            # value is like "module.Class"
-                            module_name = value.split(".")[0]
-                            file_name = f"{module_name}.py"
-                            required_files.add(file_name)
-                        
-                        for file_name in required_files:
-                            src = os.path.join(model_id, file_name)
-                            dst = os.path.join(checkpoint_dir, file_name)
-                            if os.path.abspath(src) != os.path.abspath(dst):
-                                if os.path.exists(src) and not os.path.exists(dst):
-                                    print(f"Copying custom model file {file_name} to checkpoint directory...")
-                                    shutil.copy2(src, dst)
+                    for file_name in required_files:
+                        src = os.path.join(model_id, file_name)
+                        dst = os.path.join(checkpoint_dir, file_name)
+                        if os.path.abspath(src) != os.path.abspath(dst):
+                            if os.path.exists(src) and not os.path.exists(dst):
+                                print(f"Copying custom model file {file_name} to checkpoint directory...")
+                                shutil.copy2(src, dst)
             except Exception as e:
                 print(f"Warning: Failed to check/copy custom model files: {e}")
 
             # Load
             try:
-                # 1. Load Model first (so we can inspect it if processor fails)
-                model = AutoModelForImageClassification.from_pretrained(checkpoint_dir, local_files_only=True, trust_remote_code=True)
+                # 1. Load Config first to register custom architecture
+                config = AutoConfig.from_pretrained(checkpoint_dir, local_files_only=True, trust_remote_code=True)
+                
+                # 2. Load Model
+                model = AutoModelForImageClassification.from_pretrained(checkpoint_dir, config=config, local_files_only=True, trust_remote_code=True)
                 
                 # 2. Load Processor
                 processor = None
