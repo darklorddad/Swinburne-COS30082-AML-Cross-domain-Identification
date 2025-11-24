@@ -115,15 +115,46 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
             
             # Load
             try:
-                # Try loading processor from root (model_id) or checkpoint_dir
-                try:
-                    processor = AutoImageProcessor.from_pretrained(model_id, local_files_only=True, trust_remote_code=True)
-                except OSError:
-                    # Fallback to checkpoint dir if processor config is there
-                    processor = AutoImageProcessor.from_pretrained(checkpoint_dir, local_files_only=True, trust_remote_code=True)
-
+                # 1. Load Model first (so we can inspect it if processor fails)
                 model = AutoModelForImageClassification.from_pretrained(checkpoint_dir, local_files_only=True, trust_remote_code=True)
                 
+                # 2. Load Processor
+                processor = None
+                try:
+                    # Try loading from root (model_id)
+                    processor = AutoImageProcessor.from_pretrained(model_id, local_files_only=True, trust_remote_code=True)
+                except (OSError, ValueError):
+                    try:
+                        # Try loading from checkpoint dir
+                        processor = AutoImageProcessor.from_pretrained(checkpoint_dir, local_files_only=True, trust_remote_code=True)
+                    except (OSError, ValueError):
+                        # Fallback: If model has a backbone (custom_arcface), try to create timm transform
+                        if hasattr(model, "backbone") and hasattr(model.config, "backbone"):
+                            print(f"Processor config not found. Generating from timm backbone: {model.config.backbone}")
+                            try:
+                                import timm
+                                data_config = timm.data.resolve_data_config({}, model=model.backbone)
+                                transform = timm.data.create_transform(**data_config)
+                                
+                                # Wrapper to make timm transform behave like HF processor
+                                class TimmProcessorWrapper:
+                                    def __init__(self, transform):
+                                        self.transform = transform
+                                    def __call__(self, images, return_tensors="pt"):
+                                        if isinstance(images, list):
+                                            tensors = [self.transform(img) for img in images]
+                                            pixel_values = torch.stack(tensors)
+                                        else:
+                                            pixel_values = self.transform(images).unsqueeze(0)
+                                        return {"pixel_values": pixel_values}
+                                
+                                processor = TimmProcessorWrapper(transform)
+                            except Exception as e:
+                                print(f"Failed to create timm processor: {e}")
+
+                if processor is None:
+                    raise ValueError("Could not load preprocessor_config.json and failed to generate fallback.")
+
                 if getattr(model.config, "model_type", "") == "custom_arcface":
                     model_type = "custom_arcface"
                 else:
