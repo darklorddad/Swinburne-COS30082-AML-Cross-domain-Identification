@@ -983,13 +983,13 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                         inf_pth_classes = gr.Textbox(label="Path to class list (txt/json)")
                         inf_pth_arch = gr.Textbox(label="Architecture name (timm)")
 
+                inf_button = gr.Button("Identify species", variant="primary")
                 inf_input_image = gr.Image(type="pil", label="Upload field image")
 
             with gr.Column(scale=1):
                 res_label = gr.Label(num_top_classes=5, label="Predictions")
                 res_gallery = gr.Gallery(label="Matching herbarium specimens", columns=3, height="auto")
                 res_heatmap = gr.Image(label="Heatmap")
-                inf_button = gr.Button("Identify species", variant="primary")
 
         # Event Handlers for Inference
         def update_inf_inputs(source):
