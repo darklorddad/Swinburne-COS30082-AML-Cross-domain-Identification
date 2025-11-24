@@ -246,8 +246,15 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
 
             # Load
             try:
-                processor = AutoImageProcessor.from_pretrained(model_id, local_files_only=True)
-                
+                try:
+                    processor = AutoImageProcessor.from_pretrained(model_id, local_files_only=True)
+                except OSError:
+                    if is_custom_arcface:
+                        print(f"Local processor config not found. Loading from backbone: {custom_cfg['backbone']}")
+                        processor = AutoImageProcessor.from_pretrained(custom_cfg['backbone'])
+                    else:
+                        raise
+
                 if is_custom_arcface:
                     model = ArcFaceClassifier(
                         model_name=custom_cfg["backbone"],
