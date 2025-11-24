@@ -1034,9 +1034,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         # 2. Test Set & Run
         with gr.Column(visible=True) as eval_run_container:
             with gr.Accordion("Settings", open=False):
-                eval_test_dir = gr.Textbox(label="Path to test set", value=default_test_dir, visible=False)
                 eval_mode = gr.Radio(["Standard", "Prototype Retrieval"], label="Evaluation Mode", value="Standard")
-                eval_ref_dir = gr.Textbox(label="Path to reference set (for prototypes)", value=default_ref_dir, visible=False)
                 eval_batch_size = gr.Slider(minimum=1, maximum=128, value=32, step=1, label="Batch size")
                 eval_perplexity = gr.Slider(minimum=2, maximum=100, value=30, step=1, label="t-SNE Perplexity")
             eval_button = gr.Button("Run evaluation", variant="primary")
@@ -1075,17 +1073,17 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             outputs=[eval_model_path, eval_hf_id, eval_pth_group]
         )
 
-        def update_eval_mode(mode):
-            return gr.update(visible=(mode == "Prototype Retrieval"))
-
-        eval_mode.change(fn=update_eval_mode, inputs=[eval_mode], outputs=[eval_ref_dir])
-
         eval_button.click(
             fn=lambda: (gr.update(visible=True), gr.update(visible=True)),
             outputs=[eval_results_container, eval_save_container]
         ).then(
-            fn=evaluate_test_set,
-            inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file, eval_pth_arch, eval_pth_classes, eval_test_dir, eval_batch_size, eval_perplexity, eval_mode, eval_ref_dir],
+            fn=lambda src, path, hf, pth, arch, cls, bs, perp, mode: evaluate_test_set(
+                src, path, hf, pth, arch, cls, 
+                default_test_dir, 
+                bs, perp, mode, 
+                default_ref_dir
+            ),
+            inputs=[eval_source, eval_model_path, eval_hf_id, eval_pth_file, eval_pth_arch, eval_pth_classes, eval_batch_size, eval_perplexity, eval_mode],
             outputs=[eval_plot_tsne, eval_plot_metrics, eval_results_state]
         )
         
