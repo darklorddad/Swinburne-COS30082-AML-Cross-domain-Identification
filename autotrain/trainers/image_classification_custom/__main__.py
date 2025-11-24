@@ -300,28 +300,6 @@ def train(config):
         else:
             logger.warning(f"Could not find {filename} in {script_dir}. AutoModel loading might fail.")
 
-    # Write inference notes early
-    inference_notes = f"""
-# Inference Notes
-
-To load this model, you need to instantiate the `ArcFaceClassifier` class with the same arguments used during training, and then load the weights using `safetensors`.
-
-```python
-from autotrain.trainers.image_classification_custom.utils import ArcFaceClassifier
-from safetensors.torch import load_file
-
-model = ArcFaceClassifier(
-    model_name="{config.model}",
-    num_classes={num_classes},
-    s={config.arcface_s},
-    m={config.arcface_m}
-)
-model.load_state_dict(load_file("model.safetensors"))
-model.eval()
-```
-"""
-    with open(f"{config.project_name}/inference_notes.md", "w") as f:
-        f.write(inference_notes)
 
     trainer_warmup = CustomTrainer(
         class_weights=class_weights,

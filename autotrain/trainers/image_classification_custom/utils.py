@@ -176,7 +176,7 @@ class ArcFaceClassifier(nn.Module):
         self.mm = math.sin(math.pi - m) * m
         self.loss_fn = nn.CrossEntropyLoss()
 
-    def forward(self, pixel_values, labels=None):
+    def forward(self, pixel_values, labels=None, **kwargs):
         features = self.backbone(pixel_values)
 
         # Handle different backbone output shapes
