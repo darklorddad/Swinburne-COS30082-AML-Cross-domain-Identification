@@ -1,6 +1,12 @@
 import gradio as gr
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 import torch
+try:
+    from autotrain.trainers.image_classification_custom.utils import ArcFaceClassifier
+    from safetensors.torch import load_file as safe_load_file
+except ImportError:
+    ArcFaceClassifier = None
+    safe_load_file = None
 import numpy as np
 from PIL import Image
 import os
@@ -105,10 +111,56 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
                 if checkpoints:
                     checkpoint_dir = sorted(checkpoints, key=lambda x: x[0], reverse=True)[0][1]
             
+            # Check for custom ArcFace model
+            custom_config_path = os.path.join(checkpoint_dir, "config.json")
+            is_custom_arcface = False
+            if os.path.exists(custom_config_path):
+                try:
+                    with open(custom_config_path, "r") as f:
+                        cfg = json.load(f)
+                        if cfg.get("model_type") == "custom_arcface":
+                            is_custom_arcface = True
+                            custom_cfg = cfg
+                except Exception:
+                    pass
+
             # Load
             try:
                 processor = AutoImageProcessor.from_pretrained(model_id, local_files_only=True)
-                model = AutoModelForImageClassification.from_pretrained(checkpoint_dir, local_files_only=True)
+                
+                if is_custom_arcface:
+                    if ArcFaceClassifier is None:
+                        raise ImportError("ArcFaceClassifier could not be imported. Ensure autotrain is installed.")
+                    
+                    model = ArcFaceClassifier(
+                        model_name=custom_cfg["backbone"],
+                        num_classes=custom_cfg["num_classes"],
+                        s=custom_cfg["arcface_s"],
+                        m=custom_cfg["arcface_m"]
+                    )
+                    
+                    # Load weights
+                    safetensors_path = os.path.join(checkpoint_dir, "model.safetensors")
+                    bin_path = os.path.join(checkpoint_dir, "pytorch_model.bin")
+                    
+                    if os.path.exists(safetensors_path):
+                        state_dict = safe_load_file(safetensors_path)
+                    elif os.path.exists(bin_path):
+                        state_dict = torch.load(bin_path, map_location="cpu")
+                    else:
+                        raise FileNotFoundError("No model weights found (model.safetensors or pytorch_model.bin)")
+                        
+                    model.load_state_dict(state_dict)
+                    model.eval()
+                    
+                    # Inject config for usage downstream
+                    class ConfigStub:
+                        pass
+                    model.config = ConfigStub()
+                    model.config.id2label = {int(k): v for k, v in custom_cfg.get("id2label", {}).items()}
+                    model_type = "custom_arcface"
+                else:
+                    model = AutoModelForImageClassification.from_pretrained(checkpoint_dir, local_files_only=True)
             except Exception as e:
                 raise gr.Error(f"Error loading local model: {e}")
 
@@ -204,6 +256,14 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
         probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)[0]
         top5_prob, top5_indices = torch.topk(probabilities, 5)
         return {model.config.id2label[i.item()]: p.item() for i, p in zip(top5_indices, top5_prob)}
+
+    elif model_type == "custom_arcface":
+        inputs = processor(images=input_image, return_tensors="pt")
+        with torch.no_grad(): 
+            outputs = model(inputs["pixel_values"])
+        probabilities = torch.nn.functional.softmax(outputs, dim=-1)[0]
+        top5_prob, top5_indices = torch.topk(probabilities, 5)
+        return {model.config.id2label[i.item()]: p.item() for i, p in zip(top5_indices, top5_prob)}
     
     elif model_type == "timm":
         input_tensor = processor(input_image).unsqueeze(0)
@@ -253,7 +313,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     id2label = {}
     label2id = {}
     
-    if model_type == "hf":
+    if model_type == "hf" or model_type == "custom_arcface":
         id2label = model.config.id2label
         label2id = {v: k for k, v in id2label.items()}
     elif model_type == "timm":
@@ -387,6 +447,24 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
                         else:
                             batch_emb_numpy = logits.cpu().numpy()
                             fallback_to_logits = True
+
+                    elif model_type == "custom_arcface":
+                        inputs = processor(images=batch_images, return_tensors="pt").to(device)
+                        pixel_values = inputs["pixel_values"]
+                        
+                        # Get logits
+                        logits = model(pixel_values)
+                        
+                        # Get embeddings for t-SNE
+                        # Replicate forward pass up to normalization
+                        features = model.backbone(pixel_values)
+                        if len(features.shape) == 4:
+                            features = model.pooling(features).flatten(1)
+                        elif len(features.shape) == 3:
+                            features = features.mean(dim=1)
+                        
+                        features = model.bn(features)
+                        batch_emb_numpy = torch.nn.functional.normalize(features).cpu().numpy()
 
                     elif model_type == "timm":
                         tensors = [processor(img) for img in batch_images]
