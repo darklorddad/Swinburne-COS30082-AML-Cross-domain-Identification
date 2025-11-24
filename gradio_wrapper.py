@@ -1,8 +1,5 @@
 import gradio as gr
 from transformers import AutoImageProcessor, AutoModelForImageClassification, AutoConfig
-import transformers.modeling_outputs
-from dataclasses import dataclass
-from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,14 +7,6 @@ try:
     from safetensors.torch import load_file as safe_load_file
 except ImportError:
     safe_load_file = None
-
-# Monkey-patch ImageClassifierOutput to accept pooler_output
-# This fixes an issue with some custom models (e.g. ArcFace) that pass pooler_output to the output class
-@dataclass
-class PatchedImageClassifierOutput(transformers.modeling_outputs.ImageClassifierOutput):
-    pooler_output: Optional[torch.FloatTensor] = None
-
-transformers.modeling_outputs.ImageClassifierOutput = PatchedImageClassifierOutput
 import numpy as np
 from PIL import Image
 import os
