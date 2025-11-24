@@ -3,6 +3,7 @@ import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
+import config
 
 class PlantDataset(Dataset):
     """Custom Dataset for Plant Species Identification from a pandas DataFrame."""
@@ -37,18 +38,26 @@ class PlantDataset(Dataset):
 def get_transforms():
     """Returns a dictionary of transformations for training and validation/testing."""
     # ResNet50/ConvNeXt/Xception were pre-trained on ImageNet, so we use the stats.
+    # Calculate resize dimensions based on config.IMAGE_SIZE
+    train_size = config.IMAGE_SIZE
+    val_resize = int(config.IMAGE_SIZE / 0.875) # Standard practice: resize to ~1.14x and crop
+
     data_transforms = {
         'train': transforms.Compose([
-            transforms.RandomResizedCrop(224),
+            transforms.RandomResizedCrop(train_size),
             transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+            # RandAugment is a powerful automated augmentation strategy
+            # Reduced magnitude from 9 to 5 to prevent excessive distortion
+            transforms.RandAugment(num_ops=2, magnitude=5),
             transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            # RandomErasing randomly occludes parts of the image
+            # Disabled for now as it might be too aggressive combined with other regularizations
+            # transforms.RandomErasing(p=0.25) 
         ]),
         'val': transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
+            transforms.Resize(val_resize),
+            transforms.CenterCrop(train_size),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ]),

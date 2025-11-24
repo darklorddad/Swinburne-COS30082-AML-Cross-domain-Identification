@@ -22,11 +22,23 @@ DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 32
 NUM_EPOCHS = 100
 LEARNING_RATE = 0.001
+IMAGE_SIZE = 256 # Higher resolution for better detail (Standard is 224)
 # Set to 0 if you have issues on Windows, otherwise 4 is good
 NUM_WORKERS = 0 if os.name == 'nt' else 4
-EARLY_STOPPING_PATIENCE = 5 # Number of epochs to wait for improvement before stopping
+EARLY_STOPPING_PATIENCE = 10 # Number of epochs to wait for improvement before stopping
 
-# --- Learning Rate Scheduler ---
-SCHEDULER_PATIENCE = 2 # Epochs to wait for improvement before reducing LR
+# --- Learning Rate Schedulers ---
+# For ReduceLROnPlateau (ResNet/Xception)
+SCHEDULER_PATIENCE = 5 # Epochs to wait for improvement before reducing LR
 SCHEDULER_FACTOR = 0.1 # Factor by which to reduce LR
+
+# For CosineAnnealingWarmRestarts (ConvNeXt)
+T_0 = 10      # Number of epochs for the first restart
+T_MULT = 2    # A factor increases T_i after a restart
+
 MIN_LR = 1e-6 # Minimum learning rate
+
+# --- Advanced Training Settings ---
+WEIGHT_DECAY = 0.0001 # Regularization parameter for AdamW (Reduced from 0.01)
+LABEL_SMOOTHING = 0.1 # Reduces overfitting by preventing 100% confidence
+DROP_PATH_RATE = 0.2 # Stochastic Depth rate (Regularization for deep models)

@@ -3,6 +3,24 @@ import numpy as np
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score, confusion_matrix
 from tqdm import tqdm 
 
+def rand_bbox(size, lam):
+    W = size[2]
+    H = size[3]
+    cut_rat = np.sqrt(1. - lam)
+    cut_w = int(W * cut_rat)
+    cut_h = int(H * cut_rat)
+
+    # uniform
+    cx = np.random.randint(W)
+    cy = np.random.randint(H)
+
+    bbx1 = np.clip(cx - cut_w // 2, 0, W)
+    bby1 = np.clip(cy - cut_h // 2, 0, H)
+    bbx2 = np.clip(cx + cut_w // 2, 0, W)
+    bby2 = np.clip(cy + cut_h // 2, 0, H)
+
+    return bbx1, bby1, bbx2, bby2
+
 def accuracy(output, target, topk=(1, 5)):
     """
     Computes the accuracy over the k top predictions for the specified values of k.
@@ -62,15 +80,54 @@ def train_model(model, train_loader, criterion, optimizer, device):
             labels = labels.to(device, non_blocking=True)
 
             optimizer.zero_grad()
-
+            
+            # Mixup / CutMix probabilities
+            p_mixup = 0.5
+            p_cutmix = 0.5
+            
             with torch.set_grad_enabled(True):
-                outputs = model(inputs)
-                loss = criterion(outputs, labels)
+                # Decide which augmentation to apply
+                rand_choice = np.random.rand()
+                
+                if rand_choice < 0.5: # 50% chance of using Mixup/CutMix
+                    if np.random.rand() < 0.5:
+                        # Apply Mixup
+                        alpha = 1.0
+                        lam = np.random.beta(alpha, alpha)
+                        rand_index = torch.randperm(inputs.size(0)).to(device)
+                        target_a = labels
+                        target_b = labels[rand_index]
+                        inputs = lam * inputs + (1 - lam) * inputs[rand_index]
+                        
+                        outputs = model(inputs)
+                        loss = lam * criterion(outputs, target_a) + (1 - lam) * criterion(outputs, target_b)
+                    else:
+                        # Apply CutMix
+                        alpha = 1.0
+                        lam = np.random.beta(alpha, alpha)
+                        rand_index = torch.randperm(inputs.size(0)).to(device)
+                        target_a = labels
+                        target_b = labels[rand_index]
+                        
+                        bbx1, bby1, bbx2, bby2 = rand_bbox(inputs.size(), lam)
+                        inputs[:, :, bbx1:bbx2, bby1:bby2] = inputs[rand_index, :, bbx1:bbx2, bby1:bby2]
+                        
+                        # Adjust lambda to match pixel ratio
+                        lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (inputs.size()[-1] * inputs.size()[-2]))
+                        
+                        outputs = model(inputs)
+                        loss = lam * criterion(outputs, target_a) + (1 - lam) * criterion(outputs, target_b)
+                else:
+                    # Standard Training
+                    outputs = model(inputs)
+                    loss = criterion(outputs, labels)
                 
                 # Move accuracy computation outside of gradient context to avoid CUDA issues
                 acc1, acc5 = accuracy(outputs.detach(), labels, topk=(1, 5))
                 
                 loss.backward()
+                # Gradient Clipping
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
             
             # Synchronize CUDA operations
@@ -143,7 +200,16 @@ def get_test_set_performance(model, test_loader, device):
         for inputs, labels in progress_bar: # <--- USE THE PROGRESS BAR
             inputs = inputs.to(device)
             labels = labels.to(device)
+            
+            # TTA: Original + Horizontal Flip
             outputs = model(inputs)
+            
+            inputs_flipped = torch.flip(inputs, [3]) # Flip width
+            outputs_flipped = model(inputs_flipped)
+            
+            # Average predictions
+            outputs = (outputs + outputs_flipped) / 2
+            
             _, preds = torch.max(outputs, 1)
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())

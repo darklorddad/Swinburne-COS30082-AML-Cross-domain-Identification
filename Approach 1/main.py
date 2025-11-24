@@ -96,13 +96,44 @@ def main():
     else: raise ValueError(f"Model {config.MODEL_NAME} is not supported.")
     model.to(device)
     
-    criterion = nn.CrossEntropyLoss()
-    params_to_update = model.fc.parameters() if config.MODEL_NAME in ['resnet50', 'xception'] else model.head.parameters()
-    optimizer = optim.Adam(params_to_update, lr=config.LEARNING_RATE)
+    criterion = nn.CrossEntropyLoss(label_smoothing=config.LABEL_SMOOTHING)
+
+    # Pass all trainable parameters to the optimizer for fine-tuning
+    # Implement Differential Learning Rates: Lower LR for backbone, Higher LR for head
+    print(f"Number of trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
     
-    # Add a learning rate scheduler
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=config.SCHEDULER_FACTOR, 
-                                                     patience=config.SCHEDULER_PATIENCE, min_lr=config.MIN_LR)
+    # Separate head and backbone parameters
+    head_params = []
+    backbone_params = []
+    
+    # Identify head parameters based on model type
+    head_names = []
+    if config.MODEL_NAME in ['resnet50', 'xception']:
+        head_names = ['fc']
+    elif config.MODEL_NAME == 'convnextv2':
+        head_names = ['head']
+        
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        if any(h in name for h in head_names):
+            head_params.append(param)
+        else:
+            backbone_params.append(param)
+
+    optimizer = optim.AdamW([
+        {'params': backbone_params, 'lr': config.LEARNING_RATE * 0.1}, # Lower LR for backbone
+        {'params': head_params, 'lr': config.LEARNING_RATE}           # Base LR for head
+    ], weight_decay=config.WEIGHT_DECAY)
+    
+    # Dynamic Scheduler Selection
+    if config.MODEL_NAME == 'convnextv2':
+        # Cosine Annealing with Warm Restarts for ConvNeXt
+        scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=config.T_0, T_mult=config.T_MULT, eta_min=config.MIN_LR)
+    else:
+        # ReduceLROnPlateau for ResNet50 and Xception
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=config.SCHEDULER_FACTOR, 
+                                                         patience=config.SCHEDULER_PATIENCE, min_lr=config.MIN_LR)
 
     # 4. Training and Validation Loop 
     best_val_acc = 0.0
@@ -120,8 +151,11 @@ def main():
         val_loss, val_acc = validate_model(model, val_loader, criterion, device)
         print(f'Validation Loss: {val_loss:.4f} | Validation Acc: {val_acc*100:.2f}%')
         
-        # Step the scheduler
-        scheduler.step(val_acc)
+        # Step the scheduler dynamically
+        if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+            scheduler.step(val_acc)
+        else:
+            scheduler.step()
         
         # Check if this is the best model so far and save it
         if val_acc > best_val_acc:

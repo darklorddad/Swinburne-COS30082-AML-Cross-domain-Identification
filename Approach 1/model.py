@@ -1,5 +1,6 @@
 import torch.nn as nn
 import timm
+import config
 
 def create_resnet50_model(num_classes):
     """
@@ -7,11 +8,10 @@ def create_resnet50_model(num_classes):
     Uses transfer learning by freezing the feature extraction layers.
     """
     # Create a pre-trained ResNet50 model from timm
-    model = timm.create_model('resnet50', pretrained=True)
+    model = timm.create_model('resnet50', pretrained=True, drop_path_rate=config.DROP_PATH_RATE)
 
-    # Freeze all parameters in the feature extractor
-    for param in model.parameters():
-        param.requires_grad = False
+    # Full Fine-Tuning: We do NOT freeze the backbone anymore.
+    # Differential learning rates in main.py will handle the stability.
 
     # Get the number of input features for the classifier
     # In timm's ResNet50 model, the classifier is named 'fc'
@@ -32,11 +32,9 @@ def create_convnextv2_model(num_classes):
     Uses transfer learning by freezing the feature extraction layers.
     """
     # Create a pre-trained ConvNeXtV2 Tiny model from timm
-    model = timm.create_model('convnextv2_tiny', pretrained=True)
+    model = timm.create_model('convnextv2_tiny', pretrained=True, drop_path_rate=config.DROP_PATH_RATE)
 
-    # Freeze all parameters in the feature extractor
-    for param in model.parameters():
-        param.requires_grad = False
+    # Full Fine-Tuning: We do NOT freeze the backbone anymore.
     
     # Get the number of input features for the classifier
     # In timm's ConvNeXt models, the classifier is typically 'head.fc'
@@ -57,11 +55,10 @@ def create_xception_model(num_classes):
     Uses transfer learning by freezing the feature extraction layers.
     """
     # Create a pre-trained Xception model from timm
+    # Note: Xception does not support drop_path_rate in timm
     model = timm.create_model('xception', pretrained=True)
 
-    # Freeze all parameters in the feature extractor
-    for param in model.parameters():
-        param.requires_grad = False
+    # Full Fine-Tuning: We do NOT freeze the backbone anymore.
 
     # Get the number of input features for the classifier
     # In timm's Xception model, the classifier is named 'fc'
