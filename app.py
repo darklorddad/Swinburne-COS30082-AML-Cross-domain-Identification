@@ -573,6 +573,72 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         inputs=[inf_model_path],
         outputs=[inf_model_path, metrics_model_path, eval_model_path]
     )
+    
+    def load_saved_settings():
+        config = load_config()
+        return [
+            config.get("inf_hf_id", ""),
+            config.get("inf_pth_file", ""),
+            config.get("inf_pth_classes", ""),
+            config.get("inf_pth_arch", ""),
+            config.get("eval_hf_id", ""),
+            config.get("eval_pth_file", ""),
+            config.get("eval_pth_classes", ""),
+            config.get("eval_pth_arch", ""),
+            config.get("eval_test_dir", os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set")),
+            config.get("eval_ref_dir", ""),
+            config.get("eval_export_dir", ""),
+            config.get("train_autotrain_path", ""),
+            config.get("tb_log_dir", ""),
+            config.get("tb_venv_dir", ""),
+            config.get("cn_source_dir", ""),
+            config.get("cn_destination_dir", ""),
+            config.get("db_source_dir", ""),
+            config.get("db_chart_save_path", ""),
+            config.get("db_manifest_save_path", ""),
+            config.get("dss_source_dir", ""),
+            config.get("ds_source_dir", ""),
+            config.get("ds_train_output_dir", ""),
+            config.get("ds_val_output_dir", ""),
+            config.get("ds_test_output_dir", ""),
+            config.get("ds_train_manifest_path", ""),
+            config.get("ds_val_manifest_path", ""),
+            config.get("ds_test_manifest_path", ""),
+            config.get("dp_directory_path", ""),
+            config.get("dp_manifest_save_path", ""),
+            config.get("std_test_dir", ""),
+            config.get("std_dest_dir", ""),
+            config.get("std_groundtruth_path", ""),
+            config.get("std_species_list_path", ""),
+            config.get("cust_source_dir", ""),
+            config.get("cust_destination_dir", ""),
+            config.get("cust_species_list_path", ""),
+            config.get("cust_pairs_list_path", ""),
+            config.get("rti_test_dir", ""),
+            config.get("rti_groundtruth_path", ""),
+            config.get("rti_species_list_path", "")
+        ]
+
+    demo.load(
+        fn=load_saved_settings,
+        inputs=[],
+        outputs=[
+            inf_hf_id, inf_pth_file, inf_pth_classes, inf_pth_arch,
+            eval_hf_id, eval_pth_file, eval_pth_classes, eval_pth_arch,
+            eval_test_dir, eval_ref_dir, eval_export_dir,
+            train_autotrain_path, tb_log_dir, tb_venv_dir,
+            cn_source_dir, cn_destination_dir,
+            db_source_dir, db_chart_save_path, db_manifest_save_path,
+            dss_source_dir,
+            ds_source_dir, ds_train_output_dir, ds_val_output_dir, ds_test_output_dir,
+            ds_train_manifest_path, ds_val_manifest_path, ds_test_manifest_path,
+            dp_directory_path, dp_manifest_save_path,
+            std_test_dir, std_dest_dir, std_groundtruth_path, std_species_list_path,
+            cust_source_dir, cust_destination_dir, cust_species_list_path, cust_pairs_list_path,
+            rti_test_dir, rti_groundtruth_path, rti_species_list_path
+        ]
+    )
+
     demo.load(
         fn=update_model_choices,
         inputs=[],
