@@ -54,14 +54,17 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                         label="Model source"
                     )
                     
-                    inf_model_path = gr.Dropdown(
-                        label="Select local model", 
-                        choices=[], 
-                        value=None, 
-                        filterable=False,
-                        visible=True,
-                        allow_custom_value=False
-                    )
+                    with gr.Row():
+                        inf_model_path = gr.Dropdown(
+                            label="Select local model", 
+                            choices=[], 
+                            value=None, 
+                            filterable=False,
+                            visible=True,
+                            allow_custom_value=False,
+                            scale=10
+                        )
+                        inf_refresh_btn = gr.Button("🔄", scale=1, size='sm')
                     
                     inf_hf_id = gr.Textbox(
                         label="Hugging Face model ID", 
@@ -120,14 +123,17 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                         label="Model source"
                     )
                 
-                    eval_model_path = gr.Dropdown(
-                        label="Select local model", 
-                        choices=[], 
-                        value=None, 
-                        filterable=False,
-                        visible=True,
-                        allow_custom_value=False
-                    )
+                    with gr.Row():
+                        eval_model_path = gr.Dropdown(
+                            label="Select local model", 
+                            choices=[], 
+                            value=None, 
+                            filterable=False,
+                            visible=True,
+                            allow_custom_value=False,
+                            scale=10
+                        )
+                        eval_refresh_btn = gr.Button("🔄", scale=1, size='sm')
                     eval_hf_id = gr.Textbox(
                         label="Hugging Face model ID", 
                         visible=False,
@@ -220,7 +226,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         )
 
     with gr.Tab("Training metrics"):
-        metrics_model_path = gr.Dropdown(label="Select local model", choices=[], value=None, filterable=False, allow_custom_value=False)
+        with gr.Row():
+            metrics_model_path = gr.Dropdown(label="Select local model", choices=[], value=None, filterable=False, allow_custom_value=False, scale=10)
+            metrics_refresh_btn = gr.Button("🔄", scale=1, size='sm')
         with gr.Column(visible=False) as inf_plots_container:
             with gr.Accordion("Save metrics", open=False):
                 with gr.Column():
@@ -546,9 +554,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 outputs=[rti_status]
             )
 
-    inf_model_path.focus(fn=lambda: update_model_choices("inference"), outputs=[inf_model_path])
-    metrics_model_path.focus(fn=lambda: update_model_choices("metrics"), outputs=[metrics_model_path])
-    eval_model_path.focus(fn=lambda: update_model_choices("evaluation"), outputs=[eval_model_path])
+    inf_refresh_btn.click(fn=lambda: update_model_choices("inference"), outputs=[inf_model_path])
+    metrics_refresh_btn.click(fn=lambda: update_model_choices("metrics"), outputs=[metrics_model_path])
+    eval_refresh_btn.click(fn=lambda: update_model_choices("evaluation"), outputs=[eval_model_path])
 
     def load_saved_settings():
         config = load_config()
