@@ -1,4 +1,5 @@
 import os
+import json
 import gradio as gr
 from gradio_wrapper import (
     classify_plant, show_model_charts, get_model_choices, update_model_choices,
@@ -17,6 +18,25 @@ except ImportError:
     def sort_test_dataset(*args, **kwargs): raise gr.Error("custom_utils not available")
 
 DEFAULT_MANIFEST_PATH = os.path.join('core', 'manifest.md').replace(os.sep, '/')
+
+CONFIG_FILE = "config.json"
+
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_setting(key, value):
+    config = load_config()
+    config[key] = value
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(config, f, indent=4)
+
+app_config = load_config()
 
 # #############################################################################
 # GRADIO UI
@@ -62,15 +82,23 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                     
                     inf_hf_id = gr.Textbox(
                         label="Hugging Face model ID", 
-                        visible=False
+                        visible=False,
+                        value=app_config.get("inf_hf_id", "")
                     )
+                    inf_hf_id.change(lambda x: save_setting("inf_hf_id", x), inputs=[inf_hf_id])
                     
                     with gr.Column(visible=False) as inf_pth_group:
-                        inf_pth_file = gr.Textbox(label="Path to .pth file")
-                        inf_pth_classes = gr.Textbox(label="Path to class list (txt/json)")
+                        inf_pth_file = gr.Textbox(label="Path to .pth file", value=app_config.get("inf_pth_file", ""))
+                        inf_pth_file.change(lambda x: save_setting("inf_pth_file", x), inputs=[inf_pth_file])
+
+                        inf_pth_classes = gr.Textbox(label="Path to class list (txt/json)", value=app_config.get("inf_pth_classes", ""))
+                        inf_pth_classes.change(lambda x: save_setting("inf_pth_classes", x), inputs=[inf_pth_classes])
+
                         inf_pth_arch = gr.Textbox(
-                            label="Architecture name (timm)"
+                            label="Architecture name (timm)",
+                            value=app_config.get("inf_pth_arch", "")
                         )
+                        inf_pth_arch.change(lambda x: save_setting("inf_pth_arch", x), inputs=[inf_pth_arch])
 
                 inf_input_image = gr.Image(type="pil", label="Upload an image")
 
@@ -119,21 +147,35 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                     )
                     eval_hf_id = gr.Textbox(
                         label="Hugging Face model ID", 
-                        visible=False
+                        visible=False,
+                        value=app_config.get("eval_hf_id", "")
                     )
+                    eval_hf_id.change(lambda x: save_setting("eval_hf_id", x), inputs=[eval_hf_id])
+
                     with gr.Column(visible=False) as eval_pth_group:
-                        eval_pth_file = gr.Textbox(label="Path to .pth file")
-                        eval_pth_classes = gr.Textbox(label="Path to class list (txt/json)")
+                        eval_pth_file = gr.Textbox(label="Path to .pth file", value=app_config.get("eval_pth_file", ""))
+                        eval_pth_file.change(lambda x: save_setting("eval_pth_file", x), inputs=[eval_pth_file])
+
+                        eval_pth_classes = gr.Textbox(label="Path to class list (txt/json)", value=app_config.get("eval_pth_classes", ""))
+                        eval_pth_classes.change(lambda x: save_setting("eval_pth_classes", x), inputs=[eval_pth_classes])
+
                         eval_pth_arch = gr.Textbox(
-                            label="Architecture name (timm)"
+                            label="Architecture name (timm)",
+                            value=app_config.get("eval_pth_arch", "")
                         )
+                        eval_pth_arch.change(lambda x: save_setting("eval_pth_arch", x), inputs=[eval_pth_arch])
 
         # 2. Test Set & Run
         with gr.Column(visible=True) as eval_run_container:
             with gr.Accordion("Settings", open=False):
-                eval_test_dir = gr.Textbox(label="Path to test set", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set"))
+                eval_test_dir = gr.Textbox(label="Path to test set", value=app_config.get("eval_test_dir", os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set")))
+                eval_test_dir.change(lambda x: save_setting("eval_test_dir", x), inputs=[eval_test_dir])
+
                 eval_mode = gr.Radio(["Standard", "Prototype retrieval"], label="Evaluation mode", value="Standard")
-                eval_ref_dir = gr.Textbox(label="Path to reference set (for prototypes)", visible=False)
+                
+                eval_ref_dir = gr.Textbox(label="Path to reference set (for prototypes)", visible=False, value=app_config.get("eval_ref_dir", ""))
+                eval_ref_dir.change(lambda x: save_setting("eval_ref_dir", x), inputs=[eval_ref_dir])
+
                 eval_batch_size = gr.Slider(minimum=1, maximum=128, value=32, step=1, label="Batch size")
                 eval_perplexity = gr.Slider(minimum=2, maximum=100, value=30, step=1, label="t-SNE perplexity")
             eval_button = gr.Button("Run evaluation", variant="primary")
@@ -142,7 +184,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         with gr.Column(visible=False) as eval_save_container:
             with gr.Accordion("Save evaluation", open=False):
                 with gr.Column():
-                    eval_export_dir = gr.Textbox(label="Export directory")
+                    eval_export_dir = gr.Textbox(label="Export directory", value=app_config.get("eval_export_dir", ""))
+                    eval_export_dir.change(lambda x: save_setting("eval_export_dir", x), inputs=[eval_export_dir])
+
                     eval_export_btn = gr.Button("Save", variant="primary")
                     eval_export_status = gr.Textbox(label="Status", interactive=False)
 
@@ -242,7 +286,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
     with gr.Tab("Training"):
         with gr.Accordion("AutoTrain", open=False):
-            train_autotrain_path = gr.Textbox(label="Path to AutoTrain folder")
+            train_autotrain_path = gr.Textbox(label="Path to AutoTrain folder", value=app_config.get("train_autotrain_path", ""))
+            train_autotrain_path.change(lambda x: save_setting("train_autotrain_path", x), inputs=[train_autotrain_path])
+
             train_launch_button = gr.Button("Launch AutoTrain")
             train_launch_log = gr.Textbox(label="Status", interactive=False, lines=2)
             
@@ -253,8 +299,12 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             )
 
         with gr.Accordion("TensorBoard", open=False):
-            tb_log_dir = gr.Textbox(label="Log directory")
-            tb_venv_dir = gr.Textbox(label="Venv parent directory (folder containing 'venv')")
+            tb_log_dir = gr.Textbox(label="Log directory", value=app_config.get("tb_log_dir", ""))
+            tb_log_dir.change(lambda x: save_setting("tb_log_dir", x), inputs=[tb_log_dir])
+
+            tb_venv_dir = gr.Textbox(label="Venv parent directory (folder containing 'venv')", value=app_config.get("tb_venv_dir", ""))
+            tb_venv_dir.change(lambda x: save_setting("tb_venv_dir", x), inputs=[tb_venv_dir])
+
             tb_launch_btn = gr.Button("Launch TensorBoard")
             tb_status = gr.Textbox(label="Status", interactive=False, lines=2)
 
@@ -268,8 +318,12 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         
         with gr.Accordion("Clean dataset names (snake case)", open=False):
             with gr.Column():
-                cn_source_dir = gr.Textbox(label="Source directory")
-                cn_destination_dir = gr.Textbox(label="Destination directory")
+                cn_source_dir = gr.Textbox(label="Source directory", value=app_config.get("cn_source_dir", ""))
+                cn_source_dir.change(lambda x: save_setting("cn_source_dir", x), inputs=[cn_source_dir])
+
+                cn_destination_dir = gr.Textbox(label="Destination directory", value=app_config.get("cn_destination_dir", ""))
+                cn_destination_dir.change(lambda x: save_setting("cn_destination_dir", x), inputs=[cn_destination_dir])
+
                 cn_button = gr.Button("Clean and copy", variant="primary")
                 cn_status = gr.Textbox(label="Status", interactive=False, lines=5)
             
@@ -281,11 +335,17 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
         with gr.Accordion("Check dataset balance", open=False):
             with gr.Column():
-                db_source_dir = gr.Textbox(label="Source directory")
+                db_source_dir = gr.Textbox(label="Source directory", value=app_config.get("db_source_dir", ""))
+                db_source_dir.change(lambda x: save_setting("db_source_dir", x), inputs=[db_source_dir])
+
                 db_save_files = gr.Checkbox(label="Save chart and manifest", value=False)
                 with gr.Column(visible=False) as db_save_paths_container:
-                    db_chart_save_path = gr.Textbox(label="Chart output path")
-                    db_manifest_save_path = gr.Textbox(label="Manifest output path")
+                    db_chart_save_path = gr.Textbox(label="Chart output path", value=app_config.get("db_chart_save_path", ""))
+                    db_chart_save_path.change(lambda x: save_setting("db_chart_save_path", x), inputs=[db_chart_save_path])
+
+                    db_manifest_save_path = gr.Textbox(label="Manifest output path", value=app_config.get("db_manifest_save_path", ""))
+                    db_manifest_save_path.change(lambda x: save_setting("db_manifest_save_path", x), inputs=[db_manifest_save_path])
+
                 db_check_button = gr.Button("Check", variant="primary")
                 db_plot = gr.Plot(label="Class distribution")
                 db_status_message = gr.Textbox(label="Status", interactive=False, lines=5)
@@ -304,7 +364,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
         with gr.Accordion("Check dataset splittability", open=False):
             with gr.Column():
-                dss_source_dir = gr.Textbox(label="Source directory")
+                dss_source_dir = gr.Textbox(label="Source directory", value=app_config.get("dss_source_dir", ""))
+                dss_source_dir.change(lambda x: save_setting("dss_source_dir", x), inputs=[dss_source_dir])
+
                 dss_split_type = gr.Radio(["Train/Validate", "Train/Validate/Test"], label="Split type", value="Train/Validate")
                 with gr.Row():
                     dss_train_ratio = gr.Slider(0, 100, value=80, step=1, label="Train %")
@@ -350,15 +412,28 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
         with gr.Accordion("Split dataset", open=False):
             with gr.Column():
-                ds_source_dir = gr.Textbox(label="Source directory")
+                ds_source_dir = gr.Textbox(label="Source directory", value=app_config.get("ds_source_dir", ""))
+                ds_source_dir.change(lambda x: save_setting("ds_source_dir", x), inputs=[ds_source_dir])
+
                 with gr.Row():
-                    ds_train_output_dir = gr.Textbox(label="Train zip output path")
-                    ds_val_output_dir = gr.Textbox(label="Validate zip output path")
-                    ds_test_output_dir = gr.Textbox(label="Test zip output path", visible=False)
+                    ds_train_output_dir = gr.Textbox(label="Train zip output path", value=app_config.get("ds_train_output_dir", ""))
+                    ds_train_output_dir.change(lambda x: save_setting("ds_train_output_dir", x), inputs=[ds_train_output_dir])
+
+                    ds_val_output_dir = gr.Textbox(label="Validate zip output path", value=app_config.get("ds_val_output_dir", ""))
+                    ds_val_output_dir.change(lambda x: save_setting("ds_val_output_dir", x), inputs=[ds_val_output_dir])
+
+                    ds_test_output_dir = gr.Textbox(label="Test zip output path", visible=False, value=app_config.get("ds_test_output_dir", ""))
+                    ds_test_output_dir.change(lambda x: save_setting("ds_test_output_dir", x), inputs=[ds_test_output_dir])
+
                 with gr.Row():
-                    ds_train_manifest_path = gr.Textbox(label="Train manifest output path")
-                    ds_val_manifest_path = gr.Textbox(label="Validate manifest output path")
-                    ds_test_manifest_path = gr.Textbox(label="Test manifest output path", visible=False)
+                    ds_train_manifest_path = gr.Textbox(label="Train manifest output path", value=app_config.get("ds_train_manifest_path", ""))
+                    ds_train_manifest_path.change(lambda x: save_setting("ds_train_manifest_path", x), inputs=[ds_train_manifest_path])
+
+                    ds_val_manifest_path = gr.Textbox(label="Validate manifest output path", value=app_config.get("ds_val_manifest_path", ""))
+                    ds_val_manifest_path.change(lambda x: save_setting("ds_val_manifest_path", x), inputs=[ds_val_manifest_path])
+
+                    ds_test_manifest_path = gr.Textbox(label="Test manifest output path", visible=False, value=app_config.get("ds_test_manifest_path", ""))
+                    ds_test_manifest_path.change(lambda x: save_setting("ds_test_manifest_path", x), inputs=[ds_test_manifest_path])
                 ds_split_type = gr.Radio(["Train/Validate", "Train/Validate/Test"], label="Split type", value="Train/Validate")
                 with gr.Row():
                     ds_train_ratio = gr.Slider(0, 100, value=80, step=1, label="Train %")
@@ -406,11 +481,16 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         with gr.Accordion("Generate directory manifest", open=False):
             with gr.Column():
                 dp_directory_path = gr.Textbox(
-                    label="Directory path"
+                    label="Directory path",
+                    value=app_config.get("dp_directory_path", "")
                 )
+                dp_directory_path.change(lambda x: save_setting("dp_directory_path", x), inputs=[dp_directory_path])
+
                 dp_manifest_save_path = gr.Textbox(
-                    label="Manifest output path"
+                    label="Manifest output path",
+                    value=app_config.get("dp_manifest_save_path", "")
                 )
+                dp_manifest_save_path.change(lambda x: save_setting("dp_manifest_save_path", x), inputs=[dp_manifest_save_path])
                 dp_manifest_type = gr.Radio(["Directories only", "Directories and files"], label="Manifest content", value="Directories only")
                 dp_generate_button = gr.Button("Generate", variant="primary")
                 dp_status_message = gr.Textbox(label="Status", interactive=False, lines=5)
@@ -424,10 +504,18 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
     with gr.Tab("Custom", visible=CUSTOM_UTILS_AVAILABLE):
         with gr.Accordion("Sort Test Dataset (PlantCLEF)", open=False):
             with gr.Column():
-                std_test_dir = gr.Textbox(label="Test Directory (Flat images)")
-                std_dest_dir = gr.Textbox(label="Destination Directory (Class folders)")
-                std_groundtruth_path = gr.Textbox(label="Groundtruth File Path")
-                std_species_list_path = gr.Textbox(label="Species List Path")
+                std_test_dir = gr.Textbox(label="Test Directory (Flat images)", value=app_config.get("std_test_dir", ""))
+                std_test_dir.change(lambda x: save_setting("std_test_dir", x), inputs=[std_test_dir])
+
+                std_dest_dir = gr.Textbox(label="Destination Directory (Class folders)", value=app_config.get("std_dest_dir", ""))
+                std_dest_dir.change(lambda x: save_setting("std_dest_dir", x), inputs=[std_dest_dir])
+
+                std_groundtruth_path = gr.Textbox(label="Groundtruth File Path", value=app_config.get("std_groundtruth_path", ""))
+                std_groundtruth_path.change(lambda x: save_setting("std_groundtruth_path", x), inputs=[std_groundtruth_path])
+
+                std_species_list_path = gr.Textbox(label="Species List Path", value=app_config.get("std_species_list_path", ""))
+                std_species_list_path.change(lambda x: save_setting("std_species_list_path", x), inputs=[std_species_list_path])
+
                 std_button = gr.Button("Sort Test Set", variant="primary")
                 std_status = gr.Textbox(label="Status", interactive=False, lines=5)
             
@@ -439,10 +527,18 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
         with gr.Accordion("Sort Dataset (PlantCLEF)", open=False):
             with gr.Column():
-                cust_source_dir = gr.Textbox(label="Source directory")
-                cust_destination_dir = gr.Textbox(label="Destination directory")
-                cust_species_list_path = gr.Textbox(label="Species List Path (ID;Name format)")
-                cust_pairs_list_path = gr.Textbox(label="Pairs List Path (Optional, list of IDs)")
+                cust_source_dir = gr.Textbox(label="Source directory", value=app_config.get("cust_source_dir", ""))
+                cust_source_dir.change(lambda x: save_setting("cust_source_dir", x), inputs=[cust_source_dir])
+
+                cust_destination_dir = gr.Textbox(label="Destination directory", value=app_config.get("cust_destination_dir", ""))
+                cust_destination_dir.change(lambda x: save_setting("cust_destination_dir", x), inputs=[cust_destination_dir])
+
+                cust_species_list_path = gr.Textbox(label="Species List Path (ID;Name format)", value=app_config.get("cust_species_list_path", ""))
+                cust_species_list_path.change(lambda x: save_setting("cust_species_list_path", x), inputs=[cust_species_list_path])
+
+                cust_pairs_list_path = gr.Textbox(label="Pairs List Path (Optional, list of IDs)", value=app_config.get("cust_pairs_list_path", ""))
+                cust_pairs_list_path.change(lambda x: save_setting("cust_pairs_list_path", x), inputs=[cust_pairs_list_path])
+
                 cust_sort_button = gr.Button("Sort Dataset", variant="primary")
                 cust_status_message = gr.Textbox(label="Status", interactive=False, lines=5)
 
@@ -454,9 +550,15 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
 
         with gr.Accordion("Rename Test Images (PlantCLEF)", open=False):
             with gr.Column():
-                rti_test_dir = gr.Textbox(label="Test Directory")
-                rti_groundtruth_path = gr.Textbox(label="Groundtruth File Path")
-                rti_species_list_path = gr.Textbox(label="Species List Path")
+                rti_test_dir = gr.Textbox(label="Test Directory", value=app_config.get("rti_test_dir", ""))
+                rti_test_dir.change(lambda x: save_setting("rti_test_dir", x), inputs=[rti_test_dir])
+
+                rti_groundtruth_path = gr.Textbox(label="Groundtruth File Path", value=app_config.get("rti_groundtruth_path", ""))
+                rti_groundtruth_path.change(lambda x: save_setting("rti_groundtruth_path", x), inputs=[rti_groundtruth_path])
+
+                rti_species_list_path = gr.Textbox(label="Species List Path", value=app_config.get("rti_species_list_path", ""))
+                rti_species_list_path.change(lambda x: save_setting("rti_species_list_path", x), inputs=[rti_species_list_path])
+
                 rti_button = gr.Button("Rename Images", variant="primary")
                 rti_status = gr.Textbox(label="Status", interactive=False, lines=5)
             
