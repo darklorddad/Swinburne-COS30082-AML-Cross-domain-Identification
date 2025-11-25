@@ -236,22 +236,22 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 )
 
             with gr.Row():
-                inf_plot_loss = gr.Plot(label="Loss")
-                inf_plot_acc = gr.Plot(label="Accuracy")
+                inf_plot_loss = gr.Plot(label="Loss", value=get_placeholder_plot())
+                inf_plot_acc = gr.Plot(label="Accuracy", value=get_placeholder_plot())
             with gr.Row():
-                inf_plot_lr = gr.Plot(label="Learning rate")
-                inf_plot_grad = gr.Plot(label="Gradient norm")
+                inf_plot_lr = gr.Plot(label="Learning rate", value=get_placeholder_plot())
+                inf_plot_grad = gr.Plot(label="Gradient norm", value=get_placeholder_plot())
             with gr.Row():
-                inf_plot_f1 = gr.Plot(label="F1 scores")
-                inf_plot_prec = gr.Plot(label="Precision")
+                inf_plot_f1 = gr.Plot(label="F1 scores", value=get_placeholder_plot())
+                inf_plot_prec = gr.Plot(label="Precision", value=get_placeholder_plot())
             with gr.Row():
-                inf_plot_recall = gr.Plot(label="Recall")
-                inf_plot_epoch = gr.Plot(label="Epoch")
+                inf_plot_recall = gr.Plot(label="Recall", value=get_placeholder_plot())
+                inf_plot_epoch = gr.Plot(label="Epoch", value=get_placeholder_plot())
             with gr.Row():
-                inf_plot_runtime = gr.Plot(label="Eval runtime")
-                inf_plot_sps = gr.Plot(label="Eval samples/sec")
+                inf_plot_runtime = gr.Plot(label="Eval runtime", value=get_placeholder_plot())
+                inf_plot_sps = gr.Plot(label="Eval samples/sec", value=get_placeholder_plot())
             with gr.Row():
-                inf_plot_steps_ps = gr.Plot(label="Eval steps/sec")
+                inf_plot_steps_ps = gr.Plot(label="Eval steps/sec", value=get_placeholder_plot())
 
         inf_plots = [
             inf_plot_loss, inf_plot_acc, inf_plot_lr, inf_plot_grad, inf_plot_f1,
@@ -259,6 +259,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             inf_plot_sps, inf_plot_steps_ps
         ]
         metrics_load_btn.click(
+            fn=lambda: [get_placeholder_plot()] * 11 + [gr.update(visible=True)],
+            outputs=inf_plots + [inf_plots_container]
+        ).then(
             fn=show_model_charts,
             inputs=[metrics_model_path],
             outputs=inf_plots + [inf_plots_container]
