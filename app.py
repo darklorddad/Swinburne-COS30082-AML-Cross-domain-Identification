@@ -220,9 +220,8 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         )
 
     with gr.Tab("Training metrics"):
-        with gr.Row():
-            metrics_model_path = gr.Dropdown(label="Select local model", choices=[], value=None, filterable=False, allow_custom_value=False, scale=5)
-            metrics_load_btn = gr.Button("Load metrics", variant="primary", scale=1)
+        metrics_model_path = gr.Dropdown(label="Select local model", choices=[], value=None, filterable=False, allow_custom_value=False)
+        metrics_load_btn = gr.Button("Load metrics", variant="primary")
 
         with gr.Column(visible=False) as inf_plots_container:
             with gr.Accordion("Save metrics", open=False):
