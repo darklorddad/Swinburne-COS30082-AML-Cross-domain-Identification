@@ -256,15 +256,10 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             inf_plot_prec, inf_plot_recall, inf_plot_epoch, inf_plot_runtime,
             inf_plot_sps, inf_plot_steps_ps
         ]
-        inf_model_path.change(
-            fn=show_model_charts,
-            inputs=[inf_model_path],
-            outputs=inf_plots + [inf_plots_container, metrics_model_path]
-        )
         metrics_model_path.change(
             fn=show_model_charts,
             inputs=[metrics_model_path],
-            outputs=inf_plots + [inf_plots_container, inf_model_path]
+            outputs=inf_plots + [inf_plots_container]
         )
 
     with gr.Tab("Training"):

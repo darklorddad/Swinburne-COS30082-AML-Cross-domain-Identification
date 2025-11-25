@@ -949,9 +949,9 @@ def launch_autotrain_ui(autotrain_path: str):
         return f"Failed to launch AutoTrain UI: {e}"
 
 def show_model_charts(model_dir):
-    """Finds trainer_state.json, returns metric plots, and the model_dir for sync."""
+    """Finds trainer_state.json, returns metric plots."""
     if not model_dir:
-        return (None,) * 11 + (gr.update(visible=False), None)
+        return (None,) * 11 + (gr.update(visible=False),)
 
     # The model_dir might be a checkpoint. trainer_state.json is usually in the parent.
     search_dir = model_dir
@@ -967,7 +967,7 @@ def show_model_charts(model_dir):
 
     if not json_path:
         print(f"trainer_state.json not found in '{search_dir}' or its subdirectories.")
-        return (None,) * 11 + (gr.update(visible=False), model_dir)
+        return (None,) * 11 + (gr.update(visible=False),)
 
     try:
         figures = util_plot_training_metrics(json_path)
@@ -976,12 +976,11 @@ def show_model_charts(model_dir):
             figures.get('Gradient Norm'), figures.get('F1 Scores'), figures.get('Precision'),
             figures.get('Recall'), figures.get('Epoch'), figures.get('Eval Runtime'),
             figures.get('Eval Samples/sec'), figures.get('Eval Steps/sec'),
-            gr.update(visible=True),
-            model_dir
+            gr.update(visible=True)
         )
     except Exception as e:
         print(f"Error generating plots for {json_path}: {e}")
-        return (None,) * 11 + (gr.update(visible=False), model_dir)
+        return (None,) * 11 + (gr.update(visible=False),)
 
 
 def save_metrics(model_dir):
