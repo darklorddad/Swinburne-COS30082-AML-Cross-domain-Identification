@@ -8,7 +8,8 @@ def create_resnet50_model(num_classes):
     Uses transfer learning by freezing the feature extraction layers.
     """
     # Create a pre-trained ResNet50 model from timm
-    model = timm.create_model('resnet50', pretrained=True, drop_path_rate=config.DROP_PATH_RATE)
+    # Disable Stochastic Depth for ResNet50 to allow for better convergence
+    model = timm.create_model('resnet50', pretrained=True, drop_path_rate=0.0)
 
     # Full Fine-Tuning: We do NOT freeze the backbone anymore.
     # Differential learning rates in main.py will handle the stability.

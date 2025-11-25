@@ -62,7 +62,7 @@ def accuracy(output, target, topk=(1, 5)):
                 res.append(torch.tensor(0.0, device=output.device))
         return res
 
-def train_model(model, train_loader, criterion, optimizer, device):
+def train_model(model, train_loader, criterion, optimizer, device, model_name='convnextv2'):
     """
     Trains the model for one epoch on the training set.
     """
@@ -82,14 +82,14 @@ def train_model(model, train_loader, criterion, optimizer, device):
             optimizer.zero_grad()
             
             # Mixup / CutMix probabilities
-            p_mixup = 0.5
-            p_cutmix = 0.5
+            # Disable Mixup/CutMix for ResNet/Xception as they struggle to learn from it with limited epochs
+            use_mixup = False
+            if model_name == 'convnextv2':
+                if np.random.rand() < 0.5: # 50% chance to apply Mixup/CutMix
+                    use_mixup = True
             
             with torch.set_grad_enabled(True):
-                # Decide which augmentation to apply
-                rand_choice = np.random.rand()
-                
-                if rand_choice < 0.5: # 50% chance of using Mixup/CutMix
+                if use_mixup:
                     if np.random.rand() < 0.5:
                         # Apply Mixup
                         alpha = 1.0

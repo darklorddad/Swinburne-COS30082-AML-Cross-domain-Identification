@@ -35,20 +35,24 @@ class PlantDataset(Dataset):
 
         return image, label
 
-def get_transforms():
+def get_transforms(model_name='convnextv2'):
     """Returns a dictionary of transformations for training and validation/testing."""
     # ResNet50/ConvNeXt/Xception were pre-trained on ImageNet, so we use the stats.
     # Calculate resize dimensions based on config.IMAGE_SIZE
     train_size = config.IMAGE_SIZE
     val_resize = int(config.IMAGE_SIZE / 0.875) # Standard practice: resize to ~1.14x and crop
 
+    # Dynamic RandAugment Magnitude
+    # Modern models like ConvNeXt benefit from strong aug (magnitude 5-9)
+    # Older models like ResNet/Xception prefer weaker aug (magnitude 2-3)
+    ra_magnitude = 5 if model_name == 'convnextv2' else 2
+
     data_transforms = {
         'train': transforms.Compose([
             transforms.RandomResizedCrop(train_size),
             transforms.RandomHorizontalFlip(),
             # RandAugment is a powerful automated augmentation strategy
-            # Reduced magnitude from 9 to 5 to prevent excessive distortion
-            transforms.RandAugment(num_ops=2, magnitude=5),
+            transforms.RandAugment(num_ops=2, magnitude=ra_magnitude),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
             # RandomErasing randomly occludes parts of the image

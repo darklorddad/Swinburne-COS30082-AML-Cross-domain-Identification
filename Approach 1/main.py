@@ -74,6 +74,9 @@ def main():
     test_df['class_id'] = test_df['class_id'].astype(int)
 
     # Create dataset instances from the dataframes
+    # Pass model_name to get_transforms to select appropriate augmentations
+    data_transforms = get_transforms(model_name=config.MODEL_NAME)
+    
     train_dataset = PlantDataset(root_dir=config.DATA_DIR, dataframe=train_df, transform=data_transforms['train'])
     val_dataset = PlantDataset(root_dir=config.DATA_DIR, dataframe=val_df, transform=data_transforms['val'])
     test_dataset = PlantDataset(root_dir=config.DATA_DIR, dataframe=test_df, transform=data_transforms['val']) # Use 'val' transforms for test set
@@ -144,7 +147,7 @@ def main():
         print('-' * 10)
         
         # Train for one epoch
-        train_loss, train_top1, train_top5 = train_model(model, train_loader, criterion, optimizer, device)
+        train_loss, train_top1, train_top5 = train_model(model, train_loader, criterion, optimizer, device, model_name=config.MODEL_NAME)
         print(f'Train Loss: {train_loss:.4f} | Top-1 Acc: {train_top1:.2f}% | Top-5 Acc: {train_top5:.2f}%')
 
         # Validate at the end of the epoch

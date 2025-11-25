@@ -8,7 +8,7 @@ TEST_LIST = 'list/groundtruth.txt' # We use this file because it has the labels 
 
 # Model Configurations
 # CHOOSE YOUR MODEL HERE: 'resnet50', 'convnextv2', or 'xception'
-MODEL_NAME = 'xception' 
+MODEL_NAME = 'resnet50' 
 
 NUM_CLASSES = 100 
 
