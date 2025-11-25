@@ -1612,4 +1612,4 @@ def get_model_choices(task="inference"):
 def update_model_choices(task="inference"):
     """Refreshes the list of available models."""
     choices = get_model_choices(task)
-    return gr.update(choices=choices)
+    return gr.update(choices=choices, filterable=False)
