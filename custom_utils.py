@@ -117,8 +117,10 @@ def split_paired_dataset_custom(source_dir, output_dir, val_ratio):
         "species_count": 0,
         "train_herbarium": 0,
         "train_photo": 0,
-        "val_photo": 0
+        "val_photo": 0,
+        "skipped": 0
     }
+    skipped_details = []
     
     # Iterate over species folders
     for species_name in os.listdir(source_dir):
@@ -126,14 +128,6 @@ def split_paired_dataset_custom(source_dir, output_dir, val_ratio):
         if not os.path.isdir(species_path):
             continue
             
-        stats["species_count"] += 1
-        
-        # Create species folders in train/val
-        train_species_dir = os.path.join(train_dir, species_name)
-        val_species_dir = os.path.join(val_dir, species_name)
-        os.makedirs(train_species_dir, exist_ok=True)
-        os.makedirs(val_species_dir, exist_ok=True)
-        
         herbarium_files = []
         photo_files = []
         
@@ -149,16 +143,54 @@ def split_paired_dataset_custom(source_dir, output_dir, val_ratio):
             elif "photo" in fname_lower:
                 photo_files.append(file_path)
         
-        # Copy all herbarium to train
+        # Logic to ensure min 5 per set
+        n_photos = len(photo_files)
+        n_herb = len(herbarium_files)
+        
+        # 1. Calculate initial Val target (Photos only)
+        n_val = int(n_photos * (val_ratio / 100.0))
+        if n_val < 5: n_val = 5
+        
+        # 2. Check if Val requirement is met
+        if n_photos < n_val:
+            stats["skipped"] += 1
+            skipped_details.append(f"{species_name}: Not enough photos ({n_photos}) for validation (min 5).")
+            continue
+            
+        # 3. Check Train requirement (Herbarium + Remaining Photos)
+        n_train_photos = n_photos - n_val
+        total_train = n_herb + n_train_photos
+        
+        if total_train < 5:
+            # Try to reduce Val to satisfy Train, while keeping Val >= 5
+            # We need: n_herb + (n_photos - n_val) >= 5
+            # => n_val <= n_herb + n_photos - 5
+            max_allowed_val = n_herb + n_photos - 5
+            
+            if max_allowed_val < 5:
+                stats["skipped"] += 1
+                skipped_details.append(f"{species_name}: Total items ({n_herb+n_photos}) insufficient for 5 per set.")
+                continue
+            
+            n_val = max_allowed_val
+            n_train_photos = n_photos - n_val
+            # total_train is now >= 5
+        
+        # Proceed with copy
+        stats["species_count"] += 1
+        
+        train_species_dir = os.path.join(train_dir, species_name)
+        val_species_dir = os.path.join(val_dir, species_name)
+        os.makedirs(train_species_dir, exist_ok=True)
+        os.makedirs(val_species_dir, exist_ok=True)
+        
+        # Copy Herbarium -> Train
         for f in herbarium_files:
             shutil.copy2(f, train_species_dir)
             stats["train_herbarium"] += 1
             
-        # Split photos
+        # Copy Photos -> Split
         random.shuffle(photo_files)
-        n_photos = len(photo_files)
-        n_val = int(n_photos * (val_ratio / 100.0))
-        
         val_photos = photo_files[:n_val]
         train_photos = photo_files[n_val:]
         
@@ -170,11 +202,17 @@ def split_paired_dataset_custom(source_dir, output_dir, val_ratio):
             shutil.copy2(f, train_species_dir)
             stats["train_photo"] += 1
             
-    return (f"Processing complete.\n"
-            f"Species processed: {stats['species_count']}\n"
-            f"Train images: {stats['train_herbarium']} (Herbarium) + {stats['train_photo']} (Photo)\n"
-            f"Val images: {stats['val_photo']} (Photo only)\n"
-            f"Output at: {output_dir}")
+    result_msg = (f"Processing complete.\n"
+                  f"Species processed: {stats['species_count']}\n"
+                  f"Skipped species: {stats['skipped']}\n"
+                  f"Train images: {stats['train_herbarium']} (Herbarium) + {stats['train_photo']} (Photo)\n"
+                  f"Val images: {stats['val_photo']} (Photo only)\n"
+                  f"Output at: {output_dir}")
+                  
+    if skipped_details:
+        result_msg += "\n\nSkipped Details (First 10):\n" + "\n".join(skipped_details[:10])
+        
+    return result_msg
 
 def separate_paired_species(source_dir, output_dir):
     if not source_dir or not os.path.isdir(source_dir):
