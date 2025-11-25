@@ -64,7 +64,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                             allow_custom_value=False,
                             scale=10
                         )
-                        inf_refresh_btn = gr.Button("Refresh", variant="secondary", scale=1)
+                        inf_refresh_btn = gr.Button("Refresh", variant="primary", scale=1)
                     
                     inf_hf_id = gr.Textbox(
                         label="Hugging Face model ID", 
@@ -133,7 +133,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                             allow_custom_value=False,
                             scale=10
                         )
-                        eval_refresh_btn = gr.Button("Refresh", variant="secondary", scale=1)
+                        eval_refresh_btn = gr.Button("Refresh", variant="primary", scale=1)
                     eval_hf_id = gr.Textbox(
                         label="Hugging Face model ID", 
                         visible=False,
@@ -228,7 +228,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
     with gr.Tab("Training metrics"):
         with gr.Row():
             metrics_model_path = gr.Dropdown(label="Select local model", choices=[], value=None, filterable=False, allow_custom_value=False, scale=10)
-            metrics_refresh_btn = gr.Button("Refresh", variant="secondary", scale=1)
+            metrics_refresh_btn = gr.Button("Refresh", variant="primary", scale=1)
         with gr.Column(visible=False) as inf_plots_container:
             with gr.Accordion("Save metrics", open=False):
                 with gr.Column():
