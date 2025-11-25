@@ -44,23 +44,6 @@ app_config = load_config()
 
 with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !important}") as demo:
 
-    gr.HTML(
-        """
-        <script>
-            window.addEventListener('load', () => {
-                setInterval(() => {
-                    const btn = document.getElementById('model_refresh_button');
-                    if (btn) {
-                        btn.click();
-                    }
-                }, 5000);
-            });
-        </script>
-        """,
-        visible=False
-    )
-    refresh_button = gr.Button(elem_id="model_refresh_button", visible=False)
-
     with gr.Tab("Inference"):
         with gr.Row():
             with gr.Column(scale=1):
@@ -568,12 +551,10 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 outputs=[rti_status]
             )
 
-    refresh_button.click(
-        fn=update_model_choices,
-        inputs=[inf_model_path],
-        outputs=[inf_model_path, metrics_model_path, eval_model_path]
-    )
-    
+    inf_model_path.focus(fn=update_model_choices, outputs=[inf_model_path])
+    metrics_model_path.focus(fn=update_model_choices, outputs=[metrics_model_path])
+    eval_model_path.focus(fn=update_model_choices, outputs=[eval_model_path])
+
     def load_saved_settings():
         config = load_config()
         return [
@@ -639,11 +620,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         ]
     )
 
-    demo.load(
-        fn=update_model_choices,
-        inputs=[],
-        outputs=[inf_model_path, metrics_model_path, eval_model_path]
-    )
+    demo.load(fn=update_model_choices, outputs=[inf_model_path])
+    demo.load(fn=update_model_choices, outputs=[metrics_model_path])
+    demo.load(fn=update_model_choices, outputs=[eval_model_path])
 
 if __name__ == "__main__":
     demo.launch()
