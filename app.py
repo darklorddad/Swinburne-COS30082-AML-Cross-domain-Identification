@@ -578,14 +578,16 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 spd_output_dir = gr.Textbox(label="Output Directory", value=app_config.get("spd_output_dir", ""))
                 spd_output_dir.change(lambda x: save_setting("spd_output_dir", x), inputs=[spd_output_dir])
                 
-                spd_val_ratio = gr.Slider(minimum=0, maximum=100, value=20, step=1, label="Validation Ratio (%) (Photos only)")
+                with gr.Row():
+                    spd_val_ratio = gr.Slider(minimum=0, maximum=100, value=20, step=1, label="Validation Ratio (%) (Photos only)")
+                    spd_min_items = gr.Slider(minimum=1, maximum=20, value=5, step=1, label="Minimum items per set")
 
                 spd_button = gr.Button("Split Dataset", variant="primary")
                 spd_status = gr.Textbox(label="Status", interactive=False, lines=5)
             
             spd_button.click(
                 fn=split_paired_dataset_custom,
-                inputs=[spd_source_dir, spd_output_dir, spd_val_ratio],
+                inputs=[spd_source_dir, spd_output_dir, spd_val_ratio, spd_min_items],
                 outputs=[spd_status]
             )
 

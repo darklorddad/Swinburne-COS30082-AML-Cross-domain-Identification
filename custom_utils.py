@@ -101,7 +101,7 @@ def sort_test_dataset(test_dir, destination_dir, groundtruth_path, species_list_
             
     return result_msg
 
-def split_paired_dataset_custom(source_dir, output_dir, val_ratio):
+def split_paired_dataset_custom(source_dir, output_dir, val_ratio, min_items=5):
     if not source_dir or not os.path.isdir(source_dir):
         raise gr.Error("Please provide a valid source directory.")
     if not output_dir:
@@ -118,10 +118,26 @@ def split_paired_dataset_custom(source_dir, output_dir, val_ratio):
         "train_herbarium": 0,
         "train_photo": 0,
         "val_photo": 0,
-        "skipped": 0
+        "padded_files": 0
     }
-    skipped_details = []
     
+    def safe_copy(file_list, dest_dir):
+        count = 0
+        for src_path in file_list:
+            filename = os.path.basename(src_path)
+            dest_path = os.path.join(dest_dir, filename)
+            
+            # If exists (due to duplication), append suffix
+            counter = 1
+            base, ext = os.path.splitext(filename)
+            while os.path.exists(dest_path):
+                dest_path = os.path.join(dest_dir, f"{base}_copy{counter}{ext}")
+                counter += 1
+            
+            shutil.copy2(src_path, dest_path)
+            count += 1
+        return count
+
     # Iterate over species folders
     for species_name in os.listdir(source_dir):
         species_path = os.path.join(source_dir, species_name)
@@ -143,40 +159,47 @@ def split_paired_dataset_custom(source_dir, output_dir, val_ratio):
             elif "photo" in fname_lower:
                 photo_files.append(file_path)
         
-        # Logic to ensure min 5 per set
-        n_photos = len(photo_files)
-        n_herb = len(herbarium_files)
+        # --- Logic to ensure min items per set (with padding) ---
         
-        # 1. Calculate initial Val target (Photos only)
-        n_val = int(n_photos * (val_ratio / 100.0))
-        if n_val < 5: n_val = 5
+        # 1. Validation Set (Photos Only)
+        # Calculate target size
+        req_val_photos = int(len(photo_files) * (val_ratio / 100.0))
+        if req_val_photos < min_items: req_val_photos = min_items
         
-        # 2. Check if Val requirement is met
-        if n_photos < n_val:
-            stats["skipped"] += 1
-            skipped_details.append(f"{species_name}: Not enough photos ({n_photos}) for validation (min 5).")
-            continue
+        # Pad photos if insufficient
+        while len(photo_files) < req_val_photos:
+            if not photo_files: break # Cannot pad if no photos exist
+            photo_files.append(random.choice(photo_files))
+            stats["padded_files"] += 1
             
-        # 3. Check Train requirement (Herbarium + Remaining Photos)
-        n_train_photos = n_photos - n_val
-        total_train = n_herb + n_train_photos
+        # Split Photos
+        random.shuffle(photo_files)
+        val_photos = photo_files[:req_val_photos]
+        train_photos = photo_files[req_val_photos:]
         
-        if total_train < 5:
-            # Try to reduce Val to satisfy Train, while keeping Val >= 5
-            # We need: n_herb + (n_photos - n_val) >= 5
-            # => n_val <= n_herb + n_photos - 5
-            max_allowed_val = n_herb + n_photos - 5
-            
-            if max_allowed_val < 5:
-                stats["skipped"] += 1
-                skipped_details.append(f"{species_name}: Total items ({n_herb+n_photos}) insufficient for 5 per set.")
-                continue
-            
-            n_val = max_allowed_val
-            n_train_photos = n_photos - n_val
-            # total_train is now >= 5
+        # 2. Training Set (Herbarium + Remaining Photos)
+        # Check if we have enough items for training
+        current_train_count = len(herbarium_files) + len(train_photos)
         
-        # Proceed with copy
+        while current_train_count < min_items:
+            # Pad Training set
+            if herbarium_files:
+                herbarium_files.append(random.choice(herbarium_files))
+                stats["padded_files"] += 1
+                current_train_count += 1
+            elif train_photos:
+                train_photos.append(random.choice(train_photos))
+                stats["padded_files"] += 1
+                current_train_count += 1
+            elif val_photos:
+                # Fallback: Duplicate a validation photo into training
+                train_photos.append(random.choice(val_photos))
+                stats["padded_files"] += 1
+                current_train_count += 1
+            else:
+                break # No files to duplicate
+        
+        # --- Execution ---
         stats["species_count"] += 1
         
         train_species_dir = os.path.join(train_dir, species_name)
@@ -184,33 +207,16 @@ def split_paired_dataset_custom(source_dir, output_dir, val_ratio):
         os.makedirs(train_species_dir, exist_ok=True)
         os.makedirs(val_species_dir, exist_ok=True)
         
-        # Copy Herbarium -> Train
-        for f in herbarium_files:
-            shutil.copy2(f, train_species_dir)
-            stats["train_herbarium"] += 1
-            
-        # Copy Photos -> Split
-        random.shuffle(photo_files)
-        val_photos = photo_files[:n_val]
-        train_photos = photo_files[n_val:]
-        
-        for f in val_photos:
-            shutil.copy2(f, val_species_dir)
-            stats["val_photo"] += 1
-            
-        for f in train_photos:
-            shutil.copy2(f, train_species_dir)
-            stats["train_photo"] += 1
-            
+        stats["train_herbarium"] += safe_copy(herbarium_files, train_species_dir)
+        stats["train_photo"] += safe_copy(train_photos, train_species_dir)
+        stats["val_photo"] += safe_copy(val_photos, val_species_dir)
+
     result_msg = (f"Processing complete.\n"
                   f"Species processed: {stats['species_count']}\n"
-                  f"Skipped species: {stats['skipped']}\n"
+                  f"Files padded (duplicated): {stats['padded_files']}\n"
                   f"Train images: {stats['train_herbarium']} (Herbarium) + {stats['train_photo']} (Photo)\n"
                   f"Val images: {stats['val_photo']} (Photo only)\n"
                   f"Output at: {output_dir}")
-                  
-    if skipped_details:
-        result_msg += "\n\nSkipped Details (First 10):\n" + "\n".join(skipped_details[:10])
         
     return result_msg
 
