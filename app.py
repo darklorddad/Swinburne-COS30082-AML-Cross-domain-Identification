@@ -551,9 +551,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 outputs=[rti_status]
             )
 
-    inf_model_path.focus(fn=update_model_choices, outputs=[inf_model_path])
-    metrics_model_path.focus(fn=update_model_choices, outputs=[metrics_model_path])
-    eval_model_path.focus(fn=update_model_choices, outputs=[eval_model_path])
+    inf_model_path.focus(fn=lambda: update_model_choices("inference"), outputs=[inf_model_path])
+    metrics_model_path.focus(fn=lambda: update_model_choices("metrics"), outputs=[metrics_model_path])
+    eval_model_path.focus(fn=lambda: update_model_choices("evaluation"), outputs=[eval_model_path])
 
     def load_saved_settings():
         config = load_config()
@@ -620,9 +620,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         ]
     )
 
-    demo.load(fn=update_model_choices, outputs=[inf_model_path])
-    demo.load(fn=update_model_choices, outputs=[metrics_model_path])
-    demo.load(fn=update_model_choices, outputs=[eval_model_path])
+    demo.load(fn=lambda: update_model_choices("inference"), outputs=[inf_model_path])
+    demo.load(fn=lambda: update_model_choices("metrics"), outputs=[metrics_model_path])
+    demo.load(fn=lambda: update_model_choices("evaluation"), outputs=[eval_model_path])
 
 if __name__ == "__main__":
     demo.launch()

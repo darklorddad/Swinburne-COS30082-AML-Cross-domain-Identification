@@ -1554,10 +1554,10 @@ def check_dataset_splittability(source_dir, split_type, train_ratio, val_ratio, 
     return '\n'.join(report_lines)
 
 
-def get_model_choices():
+def get_model_choices(task="inference"):
     """
-    Finds model directories. Prioritises the root directory if it contains model weights.
-    Otherwise, falls back to the latest checkpoint.
+    Finds model directories. 
+    task: 'inference', 'evaluation' (requires weights) or 'metrics' (requires trainer_state.json)
     """
     choices = []
     try:
@@ -1567,37 +1567,50 @@ def get_model_choices():
         for model_dir_name in model_parent_dirs:
             model_dir_path = os.path.join(app_dir, model_dir_name)
             
-            # Check for weights in root
-            has_weights = os.path.exists(os.path.join(model_dir_path, "model.safetensors")) or \
-                          os.path.exists(os.path.join(model_dir_path, "pytorch_model.bin"))
+            if task == "metrics":
+                # Check for trainer_state.json recursively
+                has_logs = False
+                for root, _, files in os.walk(model_dir_path):
+                    if "trainer_state.json" in files:
+                        has_logs = True
+                        break
+                
+                if has_logs:
+                    choices.append((model_dir_name, model_dir_path))
             
-            if has_weights:
-                choices.append((model_dir_name, model_dir_path))
-                continue
+            else:
+                # Inference/Evaluation: Check for weights
+                # Check for weights in root
+                has_weights = os.path.exists(os.path.join(model_dir_path, "model.safetensors")) or \
+                              os.path.exists(os.path.join(model_dir_path, "pytorch_model.bin"))
+                
+                if has_weights:
+                    choices.append((model_dir_name, model_dir_path))
+                    continue
 
-            # Fallback to checkpoints
-            checkpoints = []
-            for item in os.listdir(model_dir_path):
-                path = os.path.join(model_dir_path, item)
-                if os.path.isdir(path) and item.startswith('checkpoint-'):
-                    try:
-                        step = int(item.split('-')[-1])
-                        checkpoints.append((step, path))
-                    except (ValueError, IndexError):
-                        continue
-            
-            if checkpoints:
-                latest_checkpoint = sorted(checkpoints, key=lambda x: x[0], reverse=True)[0]
-                step, path = latest_checkpoint
-                display_name = f"{model_dir_name} (ckpt-{step})"
-                choices.append((display_name, path))
+                # Fallback to checkpoints
+                checkpoints = []
+                for item in os.listdir(model_dir_path):
+                    path = os.path.join(model_dir_path, item)
+                    if os.path.isdir(path) and item.startswith('checkpoint-'):
+                        try:
+                            step = int(item.split('-')[-1])
+                            checkpoints.append((step, path))
+                        except (ValueError, IndexError):
+                            continue
+                
+                if checkpoints:
+                    latest_checkpoint = sorted(checkpoints, key=lambda x: x[0], reverse=True)[0]
+                    step, path = latest_checkpoint
+                    display_name = f"{model_dir_name} (ckpt-{step})"
+                    choices.append((display_name, path))
 
     except FileNotFoundError:
         print("Warning: Could not find the app directory to scan for models.")
     
     return sorted(choices, key=lambda x: x[0])
 
-def update_model_choices():
+def update_model_choices(task="inference"):
     """Refreshes the list of available models."""
-    choices = get_model_choices()
+    choices = get_model_choices(task)
     return gr.update(choices=choices)
