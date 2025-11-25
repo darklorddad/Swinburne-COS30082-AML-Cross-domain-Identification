@@ -633,7 +633,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             config.get("rti_groundtruth_path", ""),
             config.get("rti_species_list_path", ""),
             config.get("sps_source_dir", ""),
-            config.get("sps_output_dir", "")
+            config.get("sps_output_dir", ""),
+            config.get("spd_source_dir", ""),
+            config.get("spd_output_dir", "")
         ]
 
     demo.load(
@@ -653,7 +655,8 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             std_test_dir, std_dest_dir, std_groundtruth_path, std_species_list_path,
             cust_source_dir, cust_destination_dir, cust_species_list_path, cust_pairs_list_path,
             rti_test_dir, rti_groundtruth_path, rti_species_list_path,
-            sps_source_dir, sps_output_dir
+            sps_source_dir, sps_output_dir,
+            spd_source_dir, spd_output_dir
         ]
     )
 
