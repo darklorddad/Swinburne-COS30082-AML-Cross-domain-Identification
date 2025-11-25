@@ -3,6 +3,18 @@ import numpy as np
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score, confusion_matrix
 from tqdm import tqdm 
 
+def freeze_batchnorm_layers(model):
+    """
+    Freezes all BatchNorm layers in the model (sets them to eval mode).
+    This is useful for fine-tuning when the batch size is small.
+    """
+    for module in model.modules():
+        if isinstance(module, torch.nn.BatchNorm2d):
+            module.eval()
+            # Optional: also turn off gradient computation for BN params
+            for param in module.parameters():
+                param.requires_grad = False
+
 def rand_bbox(size, lam):
     W = size[2]
     H = size[3]

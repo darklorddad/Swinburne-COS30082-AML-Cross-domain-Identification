@@ -5,15 +5,16 @@ import os
 DATA_DIR = '.' 
 TRAIN_LIST = 'list/train.txt'
 TEST_LIST = 'list/groundtruth.txt' # We use this file because it has the labels for the test images.
+DATA_MODE = 'all' # Options: 'all', 'herbarium', 'photo'
 
 # Model Configurations
 # CHOOSE YOUR MODEL HERE: 'resnet50', 'convnextv2', or 'xception'
-MODEL_NAME = 'resnet50' 
+MODEL_NAME = 'xception' 
 
 NUM_CLASSES = 100 
 
 # Model save paths
-MODEL_SAVE_PATH_RESNET50 = 'resnet50_mixstream_baseline.pth'
+MODEL_SAVE_PATH_RESNET50 = 'resnet50_model.pth'
 MODEL_SAVE_PATH_CONVNEXTV2 = 'convnextv2_model.pth'
 MODEL_SAVE_PATH_XCEPTION = 'xception_model.pth'
 
