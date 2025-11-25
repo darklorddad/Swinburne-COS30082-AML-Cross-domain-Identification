@@ -9,7 +9,7 @@ from gradio_wrapper import (
     get_placeholder_plot
 )
 try:
-    from custom_utils import custom_sort_dataset, rename_test_images_func, sort_test_dataset, separate_paired_species, split_paired_dataset_custom
+    from custom_utils import custom_sort_dataset, rename_test_images_func, sort_test_dataset, separate_paired_species, split_paired_dataset_custom, split_hybrid_dataset
     CUSTOM_UTILS_AVAILABLE = True
 except ImportError:
     CUSTOM_UTILS_AVAILABLE = False
@@ -18,6 +18,7 @@ except ImportError:
     def sort_test_dataset(*args, **kwargs): raise gr.Error("custom_utils not available")
     def separate_paired_species(*args, **kwargs): raise gr.Error("custom_utils not available")
     def split_paired_dataset_custom(*args, **kwargs): raise gr.Error("custom_utils not available")
+    def split_hybrid_dataset(*args, **kwargs): raise gr.Error("custom_utils not available")
 
 DEFAULT_MANIFEST_PATH = os.path.join('core', 'manifest.md').replace(os.sep, '/')
 
@@ -591,6 +592,27 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 outputs=[spd_status]
             )
 
+        with gr.Accordion("Split Hybrid Dataset (Prioritise Photos for Val)", open=False):
+            with gr.Column():
+                shd_source_dir = gr.Textbox(label="Source Directory (Mixed species folders)", value=app_config.get("shd_source_dir", ""))
+                shd_source_dir.change(lambda x: save_setting("shd_source_dir", x), inputs=[shd_source_dir])
+
+                shd_output_dir = gr.Textbox(label="Output Directory", value=app_config.get("shd_output_dir", ""))
+                shd_output_dir.change(lambda x: save_setting("shd_output_dir", x), inputs=[shd_output_dir])
+                
+                with gr.Row():
+                    shd_val_ratio = gr.Slider(minimum=0, maximum=100, value=20, step=1, label="Validation Ratio (%)")
+                    shd_min_items = gr.Slider(minimum=1, maximum=20, value=5, step=1, label="Minimum items per set")
+
+                shd_button = gr.Button("Split Hybrid Dataset", variant="primary")
+                shd_status = gr.Textbox(label="Status", interactive=False, lines=5)
+            
+            shd_button.click(
+                fn=split_hybrid_dataset,
+                inputs=[shd_source_dir, shd_output_dir, shd_val_ratio, shd_min_items],
+                outputs=[shd_status]
+            )
+
     def load_saved_settings():
         config = load_config()
         return [
@@ -637,7 +659,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             config.get("sps_source_dir", ""),
             config.get("sps_output_dir", ""),
             config.get("spd_source_dir", ""),
-            config.get("spd_output_dir", "")
+            config.get("spd_output_dir", ""),
+            config.get("shd_source_dir", ""),
+            config.get("shd_output_dir", "")
         ]
 
     demo.load(
@@ -658,7 +682,8 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             cust_source_dir, cust_destination_dir, cust_species_list_path, cust_pairs_list_path,
             rti_test_dir, rti_groundtruth_path, rti_species_list_path,
             sps_source_dir, sps_output_dir,
-            spd_source_dir, spd_output_dir
+            spd_source_dir, spd_output_dir,
+            shd_source_dir, shd_output_dir
         ]
     )
 

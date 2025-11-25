@@ -220,6 +220,144 @@ def split_paired_dataset_custom(source_dir, output_dir, val_ratio, min_items=5):
         
     return result_msg
 
+def split_hybrid_dataset(source_dir, output_dir, val_ratio, min_items=5):
+    if not source_dir or not os.path.isdir(source_dir):
+        raise gr.Error("Please provide a valid source directory.")
+    if not output_dir:
+        raise gr.Error("Please provide an output directory.")
+    
+    train_dir = os.path.join(output_dir, "train")
+    val_dir = os.path.join(output_dir, "val")
+    
+    os.makedirs(train_dir, exist_ok=True)
+    os.makedirs(val_dir, exist_ok=True)
+    
+    stats = {
+        "species_count": 0,
+        "train_count": 0,
+        "val_count": 0,
+        "padded_files": 0
+    }
+    
+    def safe_copy(file_list, dest_dir):
+        count = 0
+        for src_path in file_list:
+            filename = os.path.basename(src_path)
+            dest_path = os.path.join(dest_dir, filename)
+            
+            # If exists (due to duplication), append suffix
+            counter = 1
+            base, ext = os.path.splitext(filename)
+            while os.path.exists(dest_path):
+                dest_path = os.path.join(dest_dir, f"{base}_copy{counter}{ext}")
+                counter += 1
+            
+            shutil.copy2(src_path, dest_path)
+            count += 1
+        return count
+
+    # Iterate over species folders
+    for species_name in os.listdir(source_dir):
+        species_path = os.path.join(source_dir, species_name)
+        if not os.path.isdir(species_path):
+            continue
+            
+        herbarium_files = []
+        photo_files = []
+        
+        for filename in os.listdir(species_path):
+            fname_lower = filename.lower()
+            if not fname_lower.endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+                continue
+                
+            file_path = os.path.join(species_path, filename)
+            
+            if "herbarium" in fname_lower:
+                herbarium_files.append(file_path)
+            elif "photo" in fname_lower:
+                photo_files.append(file_path)
+        
+        # --- Logic for Hybrid Split ---
+        total_files = len(photo_files) + len(herbarium_files)
+        if total_files == 0: continue
+
+        # 1. Calculate Validation Target
+        req_val = int(total_files * (val_ratio / 100.0))
+        if req_val < min_items: req_val = min_items
+        
+        val_files = []
+        train_files = []
+        
+        # 2. Fill Validation (Prioritise Photos)
+        random.shuffle(photo_files)
+        random.shuffle(herbarium_files)
+        
+        # Take as many photos as possible up to req_val
+        while len(val_files) < req_val and photo_files:
+            val_files.append(photo_files.pop(0))
+            
+        # If still need more, take herbarium
+        while len(val_files) < req_val and herbarium_files:
+            val_files.append(herbarium_files.pop(0))
+            
+        # If STILL need more (not enough unique files total), pad with duplicates
+        # Priority for padding Val: Photos -> Herbarium
+        while len(val_files) < req_val:
+            # Create pool of available files to clone from
+            pool = val_files + photo_files + herbarium_files
+            if not pool: break # Should not happen if total_files > 0
+            
+            # Prefer photos if any exist in the pool
+            photo_pool = [f for f in pool if "photo" in os.path.basename(f).lower()]
+            if photo_pool:
+                val_files.append(random.choice(photo_pool))
+            else:
+                val_files.append(random.choice(pool))
+            stats["padded_files"] += 1
+
+        # 3. Fill Training (Remaining files)
+        train_files.extend(photo_files)
+        train_files.extend(herbarium_files)
+        
+        # 4. Check Training Minimum
+        while len(train_files) < min_items:
+            # Pad Training set
+            # Priority: Herbarium -> Train Photos -> Val Photos
+            
+            # Check what we have in train_files first
+            herb_in_train = [f for f in train_files if "herbarium" in os.path.basename(f).lower()]
+            photo_in_train = [f for f in train_files if "photo" in os.path.basename(f).lower()]
+            
+            if herb_in_train:
+                train_files.append(random.choice(herb_in_train))
+            elif photo_in_train:
+                train_files.append(random.choice(photo_in_train))
+            elif val_files:
+                train_files.append(random.choice(val_files))
+            else:
+                break
+            stats["padded_files"] += 1
+
+        # --- Execution ---
+        stats["species_count"] += 1
+        
+        train_species_dir = os.path.join(train_dir, species_name)
+        val_species_dir = os.path.join(val_dir, species_name)
+        os.makedirs(train_species_dir, exist_ok=True)
+        os.makedirs(val_species_dir, exist_ok=True)
+        
+        stats["train_count"] += safe_copy(train_files, train_species_dir)
+        stats["val_count"] += safe_copy(val_files, val_species_dir)
+
+    result_msg = (f"Processing complete.\n"
+                  f"Species processed: {stats['species_count']}\n"
+                  f"Files padded (duplicated): {stats['padded_files']}\n"
+                  f"Train images: {stats['train_count']}\n"
+                  f"Val images: {stats['val_count']}\n"
+                  f"Output at: {output_dir}")
+        
+    return result_msg
+
 def separate_paired_species(source_dir, output_dir):
     if not source_dir or not os.path.isdir(source_dir):
         raise gr.Error("Please provide a valid source directory.")
