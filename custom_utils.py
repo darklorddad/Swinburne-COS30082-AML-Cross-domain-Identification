@@ -100,6 +100,59 @@ def sort_test_dataset(test_dir, destination_dir, groundtruth_path, species_list_
             
     return result_msg
 
+def separate_paired_species(source_dir, output_dir):
+    if not source_dir or not os.path.isdir(source_dir):
+        raise gr.Error("Please provide a valid source directory.")
+    if not output_dir:
+        raise gr.Error("Please provide an output directory.")
+
+    paired_dir = os.path.join(output_dir, "paired")
+    unpaired_dir = os.path.join(output_dir, "unpaired")
+    
+    os.makedirs(paired_dir, exist_ok=True)
+    os.makedirs(unpaired_dir, exist_ok=True)
+    
+    paired_count = 0
+    unpaired_count = 0
+    
+    # Iterate over species folders
+    for species_name in os.listdir(source_dir):
+        species_path = os.path.join(source_dir, species_name)
+        if not os.path.isdir(species_path):
+            continue
+            
+        has_herbarium = False
+        has_photo = False
+        
+        # Check files in the species folder
+        for filename in os.listdir(species_path):
+            fname_lower = filename.lower()
+            if not fname_lower.endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+                continue
+                
+            if "herbarium" in fname_lower:
+                has_herbarium = True
+            if "photo" in fname_lower:
+                has_photo = True
+                
+            if has_herbarium and has_photo:
+                break
+        
+        if has_herbarium and has_photo:
+            dest_path = os.path.join(paired_dir, species_name)
+            paired_count += 1
+        else:
+            dest_path = os.path.join(unpaired_dir, species_name)
+            unpaired_count += 1
+            
+        # Copy directory
+        try:
+            shutil.copytree(species_path, dest_path, dirs_exist_ok=True)
+        except Exception as e:
+            print(f"Error copying {species_name}: {e}")
+        
+    return f"Processing complete.\nPaired species: {paired_count}\nUnpaired species: {unpaired_count}\nOutput at: {output_dir}"
+
 def custom_sort_dataset(source_dir, destination_dir, species_list_path, pairs_list_path):
     """Sorts dataset into class folders named by species, renaming images with metadata."""
     if not destination_dir:

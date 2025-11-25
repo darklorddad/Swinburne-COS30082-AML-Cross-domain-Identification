@@ -9,13 +9,14 @@ from gradio_wrapper import (
     get_placeholder_plot
 )
 try:
-    from custom_utils import custom_sort_dataset, rename_test_images_func, sort_test_dataset
+    from custom_utils import custom_sort_dataset, rename_test_images_func, sort_test_dataset, separate_paired_species
     CUSTOM_UTILS_AVAILABLE = True
 except ImportError:
     CUSTOM_UTILS_AVAILABLE = False
     def custom_sort_dataset(*args, **kwargs): raise gr.Error("custom_utils not available")
     def rename_test_images_func(*args, **kwargs): raise gr.Error("custom_utils not available")
     def sort_test_dataset(*args, **kwargs): raise gr.Error("custom_utils not available")
+    def separate_paired_species(*args, **kwargs): raise gr.Error("custom_utils not available")
 
 DEFAULT_MANIFEST_PATH = os.path.join('core', 'manifest.md').replace(os.sep, '/')
 
@@ -551,6 +552,23 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                 outputs=[rti_status]
             )
 
+        with gr.Accordion("Separate Paired/Unpaired Species", open=False):
+            with gr.Column():
+                sps_source_dir = gr.Textbox(label="Source Directory (Species folders)", value=app_config.get("sps_source_dir", ""))
+                sps_source_dir.change(lambda x: save_setting("sps_source_dir", x), inputs=[sps_source_dir])
+
+                sps_output_dir = gr.Textbox(label="Output Directory", value=app_config.get("sps_output_dir", ""))
+                sps_output_dir.change(lambda x: save_setting("sps_output_dir", x), inputs=[sps_output_dir])
+
+                sps_button = gr.Button("Separate Dataset", variant="primary")
+                sps_status = gr.Textbox(label="Status", interactive=False, lines=5)
+            
+            sps_button.click(
+                fn=separate_paired_species,
+                inputs=[sps_source_dir, sps_output_dir],
+                outputs=[sps_status]
+            )
+
     def load_saved_settings():
         config = load_config()
         return [
@@ -593,7 +611,9 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             config.get("cust_pairs_list_path", ""),
             config.get("rti_test_dir", ""),
             config.get("rti_groundtruth_path", ""),
-            config.get("rti_species_list_path", "")
+            config.get("rti_species_list_path", ""),
+            config.get("sps_source_dir", ""),
+            config.get("sps_output_dir", "")
         ]
 
     demo.load(
@@ -612,7 +632,8 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             dp_directory_path, dp_manifest_save_path,
             std_test_dir, std_dest_dir, std_groundtruth_path, std_species_list_path,
             cust_source_dir, cust_destination_dir, cust_species_list_path, cust_pairs_list_path,
-            rti_test_dir, rti_groundtruth_path, rti_species_list_path
+            rti_test_dir, rti_groundtruth_path, rti_species_list_path,
+            sps_source_dir, sps_output_dir
         ]
     )
 
