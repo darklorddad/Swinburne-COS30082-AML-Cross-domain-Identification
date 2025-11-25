@@ -1,6 +1,7 @@
 import os
 import shutil
 import re
+import random
 import gradio as gr
 
 def sort_test_dataset(test_dir, destination_dir, groundtruth_path, species_list_path):
@@ -99,6 +100,81 @@ def sort_test_dataset(test_dir, destination_dir, groundtruth_path, species_list_
             result_msg += f"\n...and {len(errors)-10} more errors."
             
     return result_msg
+
+def split_paired_dataset_custom(source_dir, output_dir, val_ratio):
+    if not source_dir or not os.path.isdir(source_dir):
+        raise gr.Error("Please provide a valid source directory.")
+    if not output_dir:
+        raise gr.Error("Please provide an output directory.")
+    
+    train_dir = os.path.join(output_dir, "train")
+    val_dir = os.path.join(output_dir, "val")
+    
+    os.makedirs(train_dir, exist_ok=True)
+    os.makedirs(val_dir, exist_ok=True)
+    
+    stats = {
+        "species_count": 0,
+        "train_herbarium": 0,
+        "train_photo": 0,
+        "val_photo": 0
+    }
+    
+    # Iterate over species folders
+    for species_name in os.listdir(source_dir):
+        species_path = os.path.join(source_dir, species_name)
+        if not os.path.isdir(species_path):
+            continue
+            
+        stats["species_count"] += 1
+        
+        # Create species folders in train/val
+        train_species_dir = os.path.join(train_dir, species_name)
+        val_species_dir = os.path.join(val_dir, species_name)
+        os.makedirs(train_species_dir, exist_ok=True)
+        os.makedirs(val_species_dir, exist_ok=True)
+        
+        herbarium_files = []
+        photo_files = []
+        
+        for filename in os.listdir(species_path):
+            fname_lower = filename.lower()
+            if not fname_lower.endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+                continue
+                
+            file_path = os.path.join(species_path, filename)
+            
+            if "herbarium" in fname_lower:
+                herbarium_files.append(file_path)
+            elif "photo" in fname_lower:
+                photo_files.append(file_path)
+        
+        # Copy all herbarium to train
+        for f in herbarium_files:
+            shutil.copy2(f, train_species_dir)
+            stats["train_herbarium"] += 1
+            
+        # Split photos
+        random.shuffle(photo_files)
+        n_photos = len(photo_files)
+        n_val = int(n_photos * (val_ratio / 100.0))
+        
+        val_photos = photo_files[:n_val]
+        train_photos = photo_files[n_val:]
+        
+        for f in val_photos:
+            shutil.copy2(f, val_species_dir)
+            stats["val_photo"] += 1
+            
+        for f in train_photos:
+            shutil.copy2(f, train_species_dir)
+            stats["train_photo"] += 1
+            
+    return (f"Processing complete.\n"
+            f"Species processed: {stats['species_count']}\n"
+            f"Train images: {stats['train_herbarium']} (Herbarium) + {stats['train_photo']} (Photo)\n"
+            f"Val images: {stats['val_photo']} (Photo only)\n"
+            f"Output at: {output_dir}")
 
 def separate_paired_species(source_dir, output_dir):
     if not source_dir or not os.path.isdir(source_dir):

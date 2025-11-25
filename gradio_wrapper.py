@@ -218,7 +218,45 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
                 model = timm.create_model(clean_arch, **kwargs)
             except Exception:
                 model = timm.create_model(pth_arch, **kwargs)
-                
+
+            # --- Auto-Adapt Head for Sequential Layers (Fix for fc.0.weight errors) ---
+            # Detect if state_dict has a sequential head (e.g., fc.0.weight) while model has a single layer
+            head_name = None
+            if hasattr(model, 'fc') and isinstance(model.fc, nn.Linear): head_name = 'fc'
+            elif hasattr(model, 'classifier') and isinstance(model.classifier, nn.Linear): head_name = 'classifier'
+            elif hasattr(model, 'head') and isinstance(model.head, nn.Linear): head_name = 'head'
+
+            if head_name:
+                # Check if state_dict contains keys like "fc.0.weight"
+                seq_keys = [k for k in state_dict.keys() if k.startswith(f"{head_name}.0.weight")]
+                if seq_keys and f"{head_name}.weight" not in state_dict:
+                    print(f"Detected Sequential head in .pth for '{head_name}'. Adapting model structure...")
+                    
+                    # Extract dimensions from state_dict
+                    # Layer 0 (First Linear)
+                    w0 = state_dict[f"{head_name}.0.weight"]
+                    in_features = w0.shape[1]
+                    hidden_dim = w0.shape[0]
+                    
+                    # Layer 3 (Final Linear) - assuming standard fastai/fine-tuning structure
+                    # If fc.3 exists, we assume structure: Linear -> ReLU -> Dropout -> Linear
+                    if f"{head_name}.3.weight" in state_dict:
+                        w3 = state_dict[f"{head_name}.3.weight"]
+                        out_features = w3.shape[0]
+                        
+                        new_head = nn.Sequential(
+                            nn.Linear(in_features, hidden_dim),
+                            nn.ReLU(inplace=True),
+                            nn.Dropout(0.5), # Standard default, though exact rate isn't in weights
+                            nn.Linear(hidden_dim, out_features)
+                        )
+                        setattr(model, head_name, new_head)
+                    
+                    # Fallback: If only fc.0 exists (unlikely for this specific error, but possible)
+                    elif f"{head_name}.0.weight" in state_dict and f"{head_name}.1.weight" not in state_dict:
+                         # Just a wrapped linear?
+                         setattr(model, head_name, nn.Sequential(nn.Linear(in_features, hidden_dim)))
+
             model.load_state_dict(state_dict)
             model.eval()
 
