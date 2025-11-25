@@ -84,7 +84,7 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
     extra_data = {} # e.g. class_names for timm
 
     # --- CASE 1: Local or Hugging Face Hub ---
-    if source_type in ["Local", "Hugging Face Hub"]:
+    if source_type in ["Local", "Hugging Face hub"]:
         model_id = local_path if source_type == "Local" else hf_id
         
         if not model_id:
@@ -503,7 +503,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     # --- PROTOTYPE RETRIEVAL SETUP ---
     prototypes_tensor = None
     
-    if eval_mode == "Prototype Retrieval":
+    if eval_mode == "Prototype retrieval":
         if not reference_dir or not os.path.exists(reference_dir):
             raise gr.Error("Please provide a valid reference directory for prototype retrieval.")
         
@@ -693,7 +693,7 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
                     np.save(f_emb, batch_emb_numpy)
 
                 # Determine Logits for Metrics
-                if eval_mode == "Prototype Retrieval" and prototypes_tensor is not None and batch_emb_numpy is not None:
+                if eval_mode == "Prototype retrieval" and prototypes_tensor is not None and batch_emb_numpy is not None:
                     # Cosine Similarity: (B, D) @ (C, D).T -> (B, C)
                     # Ensure embeddings are normalized
                     feats_t = torch.tensor(batch_emb_numpy, device=device)

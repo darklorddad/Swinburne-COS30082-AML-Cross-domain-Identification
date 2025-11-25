@@ -46,7 +46,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             with gr.Column(scale=1):
                 with gr.Group():
                     inf_source = gr.Radio(
-                        choices=["Local", "Hugging Face Hub", "Local .pth"],
+                        choices=["Local", "Hugging Face hub", "Local .pth"],
                         value="Local",
                         label="Model source"
                     )
@@ -72,7 +72,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
                             label="Architecture name (timm)"
                         )
 
-                inf_input_image = gr.Image(type="pil", label="Upload a plant image")
+                inf_input_image = gr.Image(type="pil", label="Upload an image")
 
             with gr.Column(scale=1):
                 inf_output_label = gr.Label(num_top_classes=5, label="Predictions")
@@ -82,7 +82,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         def update_inf_inputs(source):
             return (
                 gr.update(visible=(source == "Local")),
-                gr.update(visible=(source == "Hugging Face Hub")),
+                gr.update(visible=(source == "Hugging Face hub")),
                 gr.update(visible=(source == "Local .pth"))
             )
 
@@ -104,7 +104,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             with gr.Column():
                 with gr.Group():
                     eval_source = gr.Radio(
-                        choices=["Local", "Hugging Face Hub", "Local .pth"],
+                        choices=["Local", "Hugging Face hub", "Local .pth"],
                         value="Local",
                         label="Model source"
                     )
@@ -132,10 +132,10 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         with gr.Column(visible=True) as eval_run_container:
             with gr.Accordion("Settings", open=False):
                 eval_test_dir = gr.Textbox(label="Path to test set", value=os.path.join("Dataset-PlantCLEF-2020-Challenge", "Images", "Test-set"))
-                eval_mode = gr.Radio(["Standard", "Prototype Retrieval"], label="Evaluation Mode", value="Standard")
+                eval_mode = gr.Radio(["Standard", "Prototype retrieval"], label="Evaluation mode", value="Standard")
                 eval_ref_dir = gr.Textbox(label="Path to reference set (for prototypes)", visible=False)
                 eval_batch_size = gr.Slider(minimum=1, maximum=128, value=32, step=1, label="Batch size")
-                eval_perplexity = gr.Slider(minimum=2, maximum=100, value=30, step=1, label="t-SNE Perplexity")
+                eval_perplexity = gr.Slider(minimum=2, maximum=100, value=30, step=1, label="t-SNE perplexity")
             eval_button = gr.Button("Run evaluation", variant="primary")
 
         # 3. Save Evaluation (Hidden until run)
@@ -157,7 +157,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         # Logic
         def update_eval_inputs(source):
             is_local = (source == "Local")
-            is_hf = (source == "Hugging Face Hub")
+            is_hf = (source == "Hugging Face hub")
             is_pth = (source == "Local .pth")
             
             return (
@@ -173,7 +173,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
         )
 
         def update_eval_mode(mode):
-            return gr.update(visible=(mode == "Prototype Retrieval"))
+            return gr.update(visible=(mode == "Prototype retrieval"))
 
         eval_mode.change(fn=update_eval_mode, inputs=[eval_mode], outputs=[eval_ref_dir])
 
