@@ -213,7 +213,7 @@ class AppParams:
         elif self.task == "image-classification":
             return self._munge_params_img_clf()
         elif self.task == "image-classification-custom":
-            return self._munge_params_img_clf()
+            return self._munge_params_img_clf_custom()
         elif self.task == "image-object-detection":
             return self._munge_params_img_obj_det()
         elif self.task.startswith("tabular"):
@@ -435,6 +435,23 @@ class AppParams:
             _params["valid_split"] = self.valid_split
 
         return ImageClassificationParams(**_params)
+
+    def _munge_params_img_clf_custom(self):
+        _params = self._munge_common_params()
+        _params["model"] = self.base_model
+        if "log" not in _params:
+            _params["log"] = "tensorboard"
+        if not self.using_hub_dataset:
+            _params["image_column"] = "autotrain_image"
+            _params["target_column"] = "autotrain_label"
+            _params["valid_split"] = "validation"
+        else:
+            _params["image_column"] = self.column_mapping.get("image" if not self.api else "image_column", "image")
+            _params["target_column"] = self.column_mapping.get("label" if not self.api else "target_column", "label")
+            _params["train_split"] = self.train_split
+            _params["valid_split"] = self.valid_split
+
+        return ImageClassificationCustomParams(**_params)
 
     def _munge_params_img_reg(self):
         _params = self._munge_common_params()
