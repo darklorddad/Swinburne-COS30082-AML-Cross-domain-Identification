@@ -5,6 +5,9 @@ from torch.utils.data import DataLoader
 import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
+import csv
+import json
+import plot_utils
 
 # Local Imports 
 import config
@@ -141,6 +144,12 @@ def main():
     # 4. Training and Validation Loop 
     best_val_acc = 0.0
     epochs_no_improve = 0
+    
+    # Initialize CSV Logger
+    log_file = f"history_{config.MODEL_NAME}_{config.DATA_MODE}.csv"
+    with open(log_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['epoch', 'train_loss', 'train_acc', 'val_loss', 'val_acc'])
 
     for epoch in range(config.NUM_EPOCHS):
         print(f'\nEpoch {epoch+1}/{config.NUM_EPOCHS}')
@@ -154,6 +163,11 @@ def main():
         val_loss, val_acc = validate_model(model, val_loader, criterion, device)
         print(f'Validation Loss: {val_loss:.4f} | Validation Acc: {val_acc*100:.2f}%')
         
+        # Log history to CSV
+        with open(log_file, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([epoch+1, train_loss, train_top1, val_loss, val_acc*100])
+        
         # Step the scheduler dynamically
         if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
             scheduler.step(val_acc)
@@ -164,10 +178,16 @@ def main():
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             epochs_no_improve = 0 # Reset counter
-            save_path = ''
-            if config.MODEL_NAME == 'resnet50': save_path = config.MODEL_SAVE_PATH_RESNET50
-            elif config.MODEL_NAME == 'convnextv2': save_path = config.MODEL_SAVE_PATH_CONVNEXTV2
-            elif config.MODEL_NAME == 'xception': save_path = config.MODEL_SAVE_PATH_XCEPTION
+            
+            # Determine base save path
+            base_save_path = ''
+            if config.MODEL_NAME == 'resnet50': base_save_path = config.MODEL_SAVE_PATH_RESNET50
+            elif config.MODEL_NAME == 'convnextv2': base_save_path = config.MODEL_SAVE_PATH_CONVNEXTV2
+            elif config.MODEL_NAME == 'xception': base_save_path = config.MODEL_SAVE_PATH_XCEPTION
+            
+            # Construct dynamic save path with DATA_MODE
+            filename, ext = os.path.splitext(base_save_path)
+            save_path = f"{filename}_{config.DATA_MODE}{ext}"
             
             torch.save(model.state_dict(), save_path)
             print(f"✨ New best model saved to {save_path} with accuracy: {best_val_acc*100:.2f}%")
@@ -181,16 +201,35 @@ def main():
 
     # 5. Final Evaluation on Test Set 
     print("\n--- Loading best model for final evaluation on test set ---")
-    save_path = ''
-    if config.MODEL_NAME == 'resnet50': save_path = config.MODEL_SAVE_PATH_RESNET50
-    elif config.MODEL_NAME == 'convnextv2': save_path = config.MODEL_SAVE_PATH_CONVNEXTV2
-    elif config.MODEL_NAME == 'xception': save_path = config.MODEL_SAVE_PATH_XCEPTION
+    base_save_path = ''
+    if config.MODEL_NAME == 'resnet50': base_save_path = config.MODEL_SAVE_PATH_RESNET50
+    elif config.MODEL_NAME == 'convnextv2': base_save_path = config.MODEL_SAVE_PATH_CONVNEXTV2
+    elif config.MODEL_NAME == 'xception': base_save_path = config.MODEL_SAVE_PATH_XCEPTION
+    
+    # Construct dynamic save path with DATA_MODE
+    filename, ext = os.path.splitext(base_save_path)
+    save_path = f"{filename}_{config.DATA_MODE}{ext}"
     
     # Load the best weights into the model
     model.load_state_dict(torch.load(save_path))
     
     # Get the final performance summary
-    performance = get_test_set_performance(model, test_loader, device)
+    
+    # Prepare sets of mapped indices for detailed evaluation (With/Without Pairs)
+    with_pairs_ids = with_pairs_df['class_id'].astype(int).tolist()
+    without_pairs_ids = without_pairs_df['class_id'].astype(int).tolist()
+
+    # Map original IDs to current 0-99 IDs
+    mapped_with_pairs = set([class_to_idx[cid] for cid in with_pairs_ids if cid in class_to_idx])
+    mapped_without_pairs = set([class_to_idx[cid] for cid in without_pairs_ids if cid in class_to_idx])
+
+    performance = get_test_set_performance(
+        model, 
+        test_loader, 
+        device, 
+        with_pairs_indices=mapped_with_pairs, 
+        without_pairs_indices=mapped_without_pairs
+    )
 
     print("\n=======================================================")
     print("FINAL SUMMARY")
@@ -205,6 +244,23 @@ def main():
     print(f"Mean F1-Score:              {performance['Mean F1-Score']:.4f}")
     print("=======================================================")
     print(f"\nBest model weights are saved in {save_path}")
+
+    # --- Save Detailed Metrics to JSON ---
+    json_save_path = f"results_{config.MODEL_NAME}_{config.DATA_MODE}.json"
+    with open(json_save_path, 'w') as f:
+        json.dump(performance['JSON_Stats'], f, indent=4)
+    print(f"Detailed JSON metrics saved to {json_save_path}")
+
+    # --- Plotting ---
+    print("\nGenerating plots...")
+    plot_utils.plot_training_history(log_file)
+    
+    cm_save_path = f"confusion_matrix_{config.MODEL_NAME}_{config.DATA_MODE}.png"
+    plot_utils.plot_confusion_matrix(
+        performance['All Labels'], 
+        performance['All Predictions'], 
+        save_path=cm_save_path
+    )
 
 if __name__ == '__main__':
     main()

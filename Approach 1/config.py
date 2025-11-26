@@ -9,7 +9,7 @@ DATA_MODE = 'all' # Options: 'all', 'herbarium', 'photo'
 
 # Model Configurations
 # CHOOSE YOUR MODEL HERE: 'resnet50', 'convnextv2', or 'xception'
-MODEL_NAME = 'xception' 
+MODEL_NAME = 'convnextv2' 
 
 NUM_CLASSES = 100 
 

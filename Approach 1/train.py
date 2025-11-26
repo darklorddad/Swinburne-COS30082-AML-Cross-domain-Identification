@@ -1,7 +1,8 @@
 import torch
 import numpy as np
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score, confusion_matrix
-from tqdm import tqdm 
+from tqdm import tqdm
+import json
 
 def freeze_batchnorm_layers(model):
     """
@@ -197,13 +198,17 @@ def validate_model(model, val_loader, criterion, device):
 
     return epoch_loss, epoch_acc
 
-def get_test_set_performance(model, test_loader, device):
+def get_test_set_performance(model, test_loader, device, with_pairs_indices=None, without_pairs_indices=None):
     """
     Performs a final evaluation on the test set with a detailed report.
     """
     model.eval()
     all_preds = []
-    all_labels = []
+    all_labels_np = []
+    
+    # We store raw outputs (logits) and labels as tensors for Top-K calculations
+    all_outputs_tensor = []
+    all_labels_tensor = []
 
     # Wrap the test_loader with tqdm for a progress bar
     progress_bar = tqdm(test_loader, desc="Testing")
@@ -222,14 +227,84 @@ def get_test_set_performance(model, test_loader, device):
             # Average predictions
             outputs = (outputs + outputs_flipped) / 2
             
+            # Collect tensors for split metrics (Overall, With Pairs, Without Pairs)
+            all_outputs_tensor.append(outputs)
+            all_labels_tensor.append(labels)
+            
             _, preds = torch.max(outputs, 1)
             all_preds.extend(preds.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
+            all_labels_np.extend(labels.cpu().numpy())
+            
+    # Concatenate all batches
+    all_outputs_tensor = torch.cat(all_outputs_tensor)
+    all_labels_tensor = torch.cat(all_labels_tensor)
 
-    precision, recall, f1, _ = precision_recall_fscore_support(all_labels, all_preds, average='macro', zero_division=0)
-    top1_accuracy = accuracy_score(all_labels, all_preds)
-    cm = confusion_matrix(all_labels, all_preds)
-    per_class_accuracy = cm.diagonal() / cm.sum(axis=1)
+    # --- Calculate Overall, With Pairs, Without Pairs Stats ---
+    def calc_metrics_for_subset(indices_set=None):
+        """Calculates N, Top-1, Top-5 for a subset of class indices."""
+        if indices_set is not None:
+            # Create a mask for samples whose label is in the indices_set
+            # Move indices_set to device tensor for comparison
+            indices_tensor = torch.tensor(list(indices_set), device=device)
+            mask = torch.isin(all_labels_tensor, indices_tensor)
+            
+            subset_outputs = all_outputs_tensor[mask]
+            subset_labels = all_labels_tensor[mask]
+        else:
+            subset_outputs = all_outputs_tensor
+            subset_labels = all_labels_tensor
+            
+        N = len(subset_labels)
+        if N == 0:
+            return N, 0.0, 0.0
+        
+        # Use the accuracy function defined above (returns percentages)
+        acc1, acc5 = accuracy(subset_outputs, subset_labels, topk=(1, 5))
+        return N, acc1.item(), acc5.item()
+
+    # Calculate stats
+    n_all, t1_all, t5_all = calc_metrics_for_subset(None) # Overall
+    
+    stats_output = {
+        "overall": {
+            "N": n_all,
+            "top1": t1_all,
+            "top5": t5_all
+        },
+        "with_pairs": {
+            "N": 0, "top1": 0.0, "top5": 0.0
+        },
+        "without_pairs": {
+            "N": 0, "top1": 0.0, "top5": 0.0
+        }
+    }
+
+    if with_pairs_indices is not None:
+        n_wp, t1_wp, t5_wp = calc_metrics_for_subset(with_pairs_indices)
+        stats_output["with_pairs"] = {"N": n_wp, "top1": t1_wp, "top5": t5_wp}
+        
+    if without_pairs_indices is not None:
+        n_wop, t1_wop, t5_wop = calc_metrics_for_subset(without_pairs_indices)
+        stats_output["without_pairs"] = {"N": n_wop, "top1": t1_wop, "top5": t5_wop}
+    
+    print("\n" + "="*30)
+    print("DETAILED PERFORMANCE METRICS (JSON)")
+    print("="*30)
+    print(json.dumps(stats_output, indent=4))
+    print("="*30 + "\n")
+    
+    # Save stats to JSON file
+    # We don't have access to config here, so we'll return it in the summary
+    # or save it with a generic name if needed, but returning it is cleaner.
+    
+    # Standard Metrics Calculation (existing code)
+    precision, recall, f1, _ = precision_recall_fscore_support(all_labels_np, all_preds, average='macro', zero_division=0)
+    top1_accuracy = accuracy_score(all_labels_np, all_preds)
+    cm = confusion_matrix(all_labels_np, all_preds)
+    # Handle potential division by zero in per-class accuracy
+    with np.errstate(divide='ignore', invalid='ignore'):
+        per_class_accuracy = cm.diagonal() / cm.sum(axis=1)
+        per_class_accuracy = np.nan_to_num(per_class_accuracy) # Replace NaNs with 0
     avg_per_class_accuracy = np.mean(per_class_accuracy)
 
     performance_summary = {
@@ -237,6 +312,9 @@ def get_test_set_performance(model, test_loader, device):
         "Average Accuracy Per Class": avg_per_class_accuracy,
         "Mean Precision": precision,
         "Mean Recall": recall,
-        "Mean F1-Score": f1
+        "Mean F1-Score": f1,
+        "All Predictions": all_preds,
+        "All Labels": all_labels_np,
+        "JSON_Stats": stats_output # <--- Added this
     }
     return performance_summary
