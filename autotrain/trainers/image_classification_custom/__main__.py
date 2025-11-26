@@ -377,10 +377,12 @@ def train(config):
     with open(f"{config.project_name}/README.md", "w") as f:
         f.write(model_card)
 
+    if PartialState().process_index == 0:
+        save_training_params(config)
+
     if config.push_to_hub and config.username != "local":
         if PartialState().process_index == 0:
             remove_autotrain_data(config)
-            save_training_params(config)
             logger.info("Pushing model to hub...")
             api = HfApi(token=config.token)
             api.create_repo(
