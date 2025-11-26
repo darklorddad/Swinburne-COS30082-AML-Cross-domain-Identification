@@ -784,52 +784,352 @@ class TrainingManager:
         input("Press Enter to continue...")
 
     def generate_reports(self):
-        """Generate comparison reports"""
+        """Generate detailed evaluation reports with domain breakdown"""
         self.clear_screen()
-        self.print_header("GENERATE COMPARISON REPORTS")
+        self.print_header("GENERATE DETAILED EVALUATION REPORTS")
 
         print("Available Reports:")
-        print("  1. Approach A Evaluation (all classifiers)")
-        print("  2. Approach B Evaluation (all fine-tuned models)")
-        print("  3. Both Reports")
+        print("  1. Evaluate Approach A (Feature Extraction + Classifiers)")
+        print("  2. Evaluate Approach B (Fine-Tuned Models)")
+        print("  3. Evaluate All Models (Approach A + B)")
+        print("  4. View Saved Results (Approach A)")
+        print("  5. View Saved Results (Approach B)")
         print("  0. Back")
         print()
 
-        choice = input("Select option (0-3): ").strip()
+        choice = input("Select option (0-5): ").strip()
 
         if choice == '1':
-            self.run_evaluation('a')
+            self.evaluate_approach_a_detailed()
         elif choice == '2':
-            self.run_evaluation('b')
+            self.evaluate_approach_b_detailed()
         elif choice == '3':
-            self.run_evaluation('a')
-            self.run_evaluation('b')
+            self.evaluate_all_models_detailed()
+        elif choice == '4':
+            self.view_saved_results('a')
+        elif choice == '5':
+            self.view_saved_results('b')
         elif choice == '0':
             return
-
-    def run_evaluation(self, approach: str):
-        """Run evaluation script"""
-        if approach == 'a':
-            script = "Approach_A_Feature_Extraction/evaluate_classifiers.py"
-            title = "Approach A"
         else:
-            script = "Approach_B_Fine_Tuning/evaluate_all_models.py"
-            title = "Approach B"
+            input("\n❌ Invalid option. Press Enter to continue...")
+            self.generate_reports()
 
-        print(f"\n🔄 Running {title} evaluation...")
+    def evaluate_approach_a_detailed(self):
+        """Run detailed evaluation for Approach A models"""
+        import subprocess
+        self.clear_screen()
+        self.print_header("EVALUATE APPROACH A - DETAILED")
 
-        script_path = Path(__file__).parent / script
+        # Check if models exist
+        results_dir = Path("Approach_A_Feature_Extraction/results")
+        if not results_dir.exists() or not list(results_dir.iterdir()):
+            print("❌ No trained models found in Approach A results directory!")
+            input("\nPress Enter to continue...")
+            self.generate_reports()
+            return
+
+        print("This will evaluate ALL trained Approach A models with:")
+        print("  • Top-1 Accuracy")
+        print("  • Top-5 Accuracy")
+        print("  • Mean Reciprocal Rank (MRR)")
+        print()
+        print("Breakdown by:")
+        print("  • Overall (all 207 test samples)")
+        print("  • With Pairs (60 classes with both herbarium + field)")
+        print("  • Without Pairs (40 classes with herbarium only)")
+        print()
+
+        confirm = input("Continue? (y/N): ").strip().lower()
+        if confirm != 'y':
+            self.generate_reports()
+            return
+
+        print("\n🔄 Running detailed evaluation...")
+        print("This may take a few minutes.\n")
+
+        # Run evaluation script
+        script_path = Path("Approach_A_Feature_Extraction/evaluate_classifiers_detailed.py")
         result = subprocess.run(
             [sys.executable, str(script_path)],
             cwd=str(Path(__file__).parent)
         )
 
         if result.returncode == 0:
-            print(f"✅ {title} evaluation complete!")
-        else:
-            print(f"❌ {title} evaluation failed")
+            print("\n✅ Evaluation complete!")
+            print(f"📁 Results saved in: Approach_A_Feature_Extraction/evaluation_results/")
 
+            # Offer to view detailed results
+            view = input("\nView detailed results now? (y/N): ").strip().lower()
+            if view == 'y':
+                self.view_saved_results('a')
+            else:
+                self.generate_reports()
+        else:
+            print("\n❌ Evaluation failed!")
+            input("\nPress Enter to continue...")
+            self.generate_reports()
+
+    def evaluate_approach_b_detailed(self):
+        """Run detailed evaluation for Approach B models"""
+        import subprocess
+        self.clear_screen()
+        self.print_header("EVALUATE APPROACH B - DETAILED")
+
+        # Check if models exist
+        models_dir = Path("Approach_B_Fine_Tuning/Models")
+        if not models_dir.exists() or not list(models_dir.iterdir()):
+            print("❌ No trained models found in Approach B Models directory!")
+            input("\nPress Enter to continue...")
+            self.generate_reports()
+            return
+
+        print("This will evaluate ALL trained Approach B models with:")
+        print("  • Top-1 Accuracy")
+        print("  • Top-5 Accuracy")
+        print("  • Mean Reciprocal Rank (MRR)")
+        print()
+        print("Breakdown by:")
+        print("  • Overall (all 207 test samples)")
+        print("  • With Pairs (60 classes with both herbarium + field)")
+        print("  • Without Pairs (40 classes with herbarium only)")
+        print()
+
+        confirm = input("Continue? (y/N): ").strip().lower()
+        if confirm != 'y':
+            self.generate_reports()
+            return
+
+        print("\n🔄 Running detailed evaluation...")
+        print("This may take a few minutes.\n")
+
+        # Run evaluation script
+        script_path = Path("Approach_B_Fine_Tuning/evaluate_all_models_detailed.py")
+        result = subprocess.run(
+            [sys.executable, str(script_path)],
+            cwd=str(Path(__file__).parent)
+        )
+
+        if result.returncode == 0:
+            print("\n✅ Evaluation complete!")
+            print(f"📁 Results saved in: Approach_B_Fine_Tuning/evaluation_results/")
+
+            # Offer to view detailed results
+            view = input("\nView detailed results now? (y/N): ").strip().lower()
+            if view == 'y':
+                self.view_saved_results('b')
+            else:
+                self.generate_reports()
+        else:
+            print("\n❌ Evaluation failed!")
+            input("\nPress Enter to continue...")
+            self.generate_reports()
+
+    def evaluate_all_models_detailed(self):
+        """Run detailed evaluation for ALL models (A + B)"""
+        import subprocess
+        self.clear_screen()
+        self.print_header("EVALUATE ALL MODELS - DETAILED")
+
+        print("This will evaluate:")
+        print("  • Approach A: All trained classifiers")
+        print("  • Approach B: All fine-tuned models")
+        print()
+        print("Estimated time: 5-10 minutes")
+        print()
+
+        confirm = input("Continue? (y/N): ").strip().lower()
+        if confirm != 'y':
+            self.generate_reports()
+            return
+
+        # Run Approach A evaluation
+        print("\n" + "=" * 70)
+        print("EVALUATING APPROACH A")
+        print("=" * 70)
+        script_path_a = Path("Approach_A_Feature_Extraction/evaluate_classifiers_detailed.py")
+        subprocess.run([sys.executable, str(script_path_a)], cwd=str(Path(__file__).parent))
+
+        # Run Approach B evaluation
+        print("\n" + "=" * 70)
+        print("EVALUATING APPROACH B")
+        print("=" * 70)
+        script_path_b = Path("Approach_B_Fine_Tuning/evaluate_all_models_detailed.py")
+        subprocess.run([sys.executable, str(script_path_b)], cwd=str(Path(__file__).parent))
+
+        print("\n✅ All evaluations complete!")
         input("\nPress Enter to continue...")
+        self.generate_reports()
+
+    def view_saved_results(self, approach: str):
+        """Display saved evaluation results with model selection"""
+        self.clear_screen()
+
+        if approach == 'a':
+            title = "APPROACH A - EVALUATION RESULTS"
+            results_file = "Approach_A_Feature_Extraction/evaluation_results/detailed_results.json"
+        else:
+            title = "APPROACH B - EVALUATION RESULTS"
+            results_file = "Approach_B_Fine_Tuning/evaluation_results/detailed_results.json"
+
+        self.print_header(title)
+
+        if not Path(results_file).exists():
+            print("❌ No evaluation results found!")
+            print(f"Expected file: {results_file}")
+            print("\nRun evaluation first from the 'Generate Reports' menu.")
+            input("\nPress Enter to continue...")
+            self.generate_reports()
+            return
+
+        # Load results
+        try:
+            with open(results_file, 'r') as f:
+                results = json.load(f)
+        except Exception as e:
+            print(f"❌ Error loading results: {e}")
+            input("\nPress Enter to continue...")
+            self.generate_reports()
+            return
+
+        if not results:
+            print("❌ No models evaluated yet!")
+            input("\nPress Enter to continue...")
+            self.generate_reports()
+            return
+
+        # Display summary table
+        print("SUMMARY TABLE:")
+        print("-" * 90)
+        self.display_results_summary(results)
+        print("-" * 90)
+        print()
+
+        # Offer detailed view
+        print("OPTIONS:")
+        print("  1. View detailed breakdown for specific model")
+        print("  0. Back")
+        print()
+
+        choice = input("Select option (0-1): ").strip()
+
+        if choice == '1':
+            self.view_model_detailed(results, approach)
+        else:
+            self.generate_reports()
+
+    def display_results_summary(self, results: dict):
+        """Display formatted summary table for all models"""
+        try:
+            from tabulate import tabulate
+        except ImportError:
+            print("⚠️  tabulate package not installed. Showing basic table.")
+            print("\nInstall with: pip install tabulate\n")
+            # Fallback to basic formatting
+            print(f"{'Model':<40} {'N':>5} {'Top-1 Acc':>12} {'Top-5 Acc':>12} {'MRR':>15}")
+            print("-" * 90)
+            for model_name, metrics in results.items():
+                overall = metrics.get('overall', {})
+                print(f"{model_name:<40} {overall.get('N', 0):>5} "
+                      f"{overall.get('top1', 0):>11.2f}% {overall.get('top5', 0):>11.2f}% "
+                      f"{overall.get('mrr', 0):>15.10f}")
+            return
+
+        # Prepare table data
+        table_data = []
+        for model_name, metrics in results.items():
+            # Overall metrics
+            overall = metrics.get('overall', {})
+            table_data.append([
+                model_name,
+                overall.get('N', 0),
+                f"{overall.get('top1', 0):.2f}%",
+                f"{overall.get('top5', 0):.2f}%",
+                f"{overall.get('mrr', 0):.10f}"
+            ])
+
+        headers = ['Model', 'N', 'Top-1 Acc', 'Top-5 Acc', 'MRR']
+        print(tabulate(table_data, headers=headers, tablefmt='grid'))
+
+    def view_model_detailed(self, results: dict, approach: str):
+        """View detailed metrics for a specific model"""
+        self.clear_screen()
+        self.print_header(f"{'APPROACH A' if approach == 'a' else 'APPROACH B'} - MODEL DETAILS")
+
+        # List available models
+        models = list(results.keys())
+        print("Select Model:\n")
+        for i, model in enumerate(models, 1):
+            print(f"  {i}. {model}")
+        print("\n  0. Back")
+        print()
+
+        try:
+            choice = input(f"Select model (0-{len(models)}): ").strip()
+            if choice == '0':
+                self.view_saved_results(approach)
+                return
+
+            idx = int(choice) - 1
+            if 0 <= idx < len(models):
+                model_name = models[idx]
+                metrics = results[model_name]
+
+                # Display detailed breakdown
+                print(f"\n{'=' * 90}")
+                print(f"MODEL: {model_name}")
+                print('=' * 90)
+                print()
+
+                # Create detailed table
+                try:
+                    from tabulate import tabulate
+                    table_data = [
+                        ['Overall', metrics['overall']['N'],
+                         f"{metrics['overall']['top1']:.2f}%",
+                         f"{metrics['overall']['top5']:.2f}%",
+                         f"{metrics['overall']['mrr']:.10f}"],
+                        ['With Pairs', metrics['with_pairs']['N'],
+                         f"{metrics['with_pairs']['top1']:.2f}%",
+                         f"{metrics['with_pairs']['top5']:.2f}%",
+                         f"{metrics['with_pairs']['mrr']:.10f}"],
+                        ['Without Pairs', metrics['without_pairs']['N'],
+                         f"{metrics['without_pairs']['top1']:.2f}%",
+                         f"{metrics['without_pairs']['top5']:.2f}%",
+                         f"{metrics['without_pairs']['mrr']:.10f}"]
+                    ]
+
+                    headers = ['Category', 'N', 'Top-1 Acc', 'Top-5 Acc', 'MRR']
+                    print(tabulate(table_data, headers=headers, tablefmt='grid'))
+                except ImportError:
+                    # Fallback formatting
+                    print(f"{'Category':<15} {'N':>5} {'Top-1 Acc':>12} {'Top-5 Acc':>12} {'MRR':>15}")
+                    print("-" * 70)
+                    for cat in ['overall', 'with_pairs', 'without_pairs']:
+                        m = metrics[cat]
+                        cat_name = cat.replace('_', ' ').title()
+                        print(f"{cat_name:<15} {m['N']:>5} {m['top1']:>11.2f}% "
+                              f"{m['top5']:>11.2f}% {m['mrr']:>15.10f}")
+                print()
+
+                # Analysis
+                diff = metrics['with_pairs']['top1'] - metrics['without_pairs']['top1']
+                print("CROSS-DOMAIN ANALYSIS:")
+                if abs(diff) < 1.0:
+                    print(f"  ✓ Excellent generalization (only {abs(diff):.2f}% difference)")
+                elif abs(diff) < 5.0:
+                    print(f"  → Good generalization ({abs(diff):.2f}% difference)")
+                else:
+                    print(f"  ⚠ Notable performance gap ({abs(diff):.2f}% difference)")
+                print()
+
+            input("\nPress Enter to continue...")
+            self.view_model_detailed(results, approach)
+
+        except ValueError:
+            print("\n❌ Invalid input")
+            input("Press Enter to continue...")
+            self.view_model_detailed(results, approach)
 
     def reset_status_menu(self):
         """Reset model status menu"""
