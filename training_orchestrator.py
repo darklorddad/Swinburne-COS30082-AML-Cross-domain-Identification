@@ -28,7 +28,7 @@ class TrainingOrchestrator:
     # Model configurations
     FEATURE_EXTRACTORS = ['plant_pretrained_base', 'imagenet_small', 'imagenet_base', 'imagenet_large']
 
-    CLASSIFIERS = ['svm', 'random_forest', 'linear_probe', 'logistic_regression']
+    CLASSIFIERS = ['svm', 'linear_probe', 'logistic_regression']
 
     FINETUNE_MODELS = ['plant_pretrained_base', 'imagenet_small', 'imagenet_base', 'imagenet_large']
 
@@ -293,7 +293,6 @@ class TrainingOrchestrator:
         # Prepare command
         script_map = {
             'svm': 'train_svm.py',
-            'random_forest': 'train_random_forest.py',
             'linear_probe': 'train_linear_probe.py',
             'logistic_regression': 'train_logistic_regression.py'
         }

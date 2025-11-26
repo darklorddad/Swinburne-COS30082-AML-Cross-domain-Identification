@@ -1,7 +1,7 @@
 """
 Evaluate All Approach A Classifiers on Test Set
 
-This script evaluates all trained classifiers (SVM, Random Forest, Linear Probe)
+This script evaluates all trained classifiers (SVM, Linear Probe, Logistic Regression)
 on the test set and calculates Top-1, Top-5, and average per-class accuracy.
 
 Usage:
@@ -98,7 +98,7 @@ def calculate_per_class_accuracy(y_true, y_pred):
 
 
 def evaluate_sklearn_model(model_path, X_test, y_test, model_name):
-    """Evaluate scikit-learn model (SVM or Random Forest)"""
+    """Evaluate scikit-learn model (SVM or Logistic Regression)"""
     print(f"\n📊 Evaluating {model_name}...")
 
     # Load model

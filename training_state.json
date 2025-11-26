@@ -30,12 +30,6 @@
         "error": null,
         "metrics": {}
       },
-      "plant_pretrained_base_random_forest": {
-        "status": "pending",
-        "last_run": null,
-        "error": null,
-        "metrics": {}
-      },
       "plant_pretrained_base_linear_probe": {
         "status": "completed",
         "last_run": "2025-11-10T02:43:01.153250",
@@ -51,12 +45,6 @@
       "imagenet_small_svm": {
         "status": "completed",
         "last_run": "2025-11-09T18:37:56.149459",
-        "error": null,
-        "metrics": {}
-      },
-      "imagenet_small_random_forest": {
-        "status": "in_progress",
-        "last_run": "2025-11-13T09:22:19.241832",
         "error": null,
         "metrics": {}
       },
@@ -78,12 +66,6 @@
         "error": null,
         "metrics": {}
       },
-      "imagenet_base_random_forest": {
-        "status": "pending",
-        "last_run": null,
-        "error": null,
-        "metrics": {}
-      },
       "imagenet_base_linear_probe": {
         "status": "completed",
         "last_run": "2025-11-09T20:09:28.270245",
@@ -99,12 +81,6 @@
       "imagenet_large_svm": {
         "status": "completed",
         "last_run": "2025-11-10T05:25:23.102894",
-        "error": null,
-        "metrics": {}
-      },
-      "imagenet_large_random_forest": {
-        "status": "pending",
-        "last_run": null,
         "error": null,
         "metrics": {}
       },

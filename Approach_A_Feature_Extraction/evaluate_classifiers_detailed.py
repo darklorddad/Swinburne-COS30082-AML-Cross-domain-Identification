@@ -216,7 +216,7 @@ def find_models(results_dir):
             # Extract info from directory name (e.g., "svm_imagenet_base")
             parts = model_dir.split('_')
             if len(parts) >= 2:
-                classifier_type = parts[0]  # svm, rf, logistic
+                classifier_type = parts[0]  # svm, logistic
                 feature_type = '_'.join(parts[1:])  # imagenet_base, plant_pretrained_base, etc.
 
                 models.append({
