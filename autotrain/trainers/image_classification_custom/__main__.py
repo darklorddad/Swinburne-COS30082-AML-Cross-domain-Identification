@@ -325,11 +325,21 @@ def train(config):
     for param in model.backbone.parameters():
         param.requires_grad = True
 
+    logger.info(f"Using backbone_lr: {config.backbone_lr}")
+    logger.info(f"Using head_lr: {config.head_lr}")
+    logger.info(f"Using optimizer: {config.optimizer}")
+
     # Differential Learning Rates
     backbone_params = list(map(id, model.backbone.parameters()))
     head_params = filter(lambda p: id(p) not in backbone_params, model.parameters())
 
-    optimizer = torch.optim.AdamW(
+    optimizer_cls = torch.optim.AdamW
+    if config.optimizer == "adam":
+        optimizer_cls = torch.optim.Adam
+    elif config.optimizer == "sgd":
+        optimizer_cls = torch.optim.SGD
+
+    optimizer = optimizer_cls(
         [
             {"params": model.backbone.parameters(), "lr": config.backbone_lr},
             {"params": head_params, "lr": config.head_lr},
