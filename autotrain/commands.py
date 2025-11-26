@@ -8,6 +8,7 @@ from autotrain.trainers.clm.params import LLMTrainingParams
 from autotrain.trainers.extractive_question_answering.params import ExtractiveQuestionAnsweringParams
 from autotrain.trainers.generic.params import GenericParams
 from autotrain.trainers.image_classification.params import ImageClassificationParams
+from autotrain.trainers.image_classification_custom.params import ImageClassificationParams as ImageClassificationCustomParams
 from autotrain.trainers.image_regression.params import ImageRegressionParams
 from autotrain.trainers.object_detection.params import ObjectDetectionParams
 from autotrain.trainers.sent_transformers.params import SentenceTransformersParams
@@ -290,6 +291,7 @@ def launch_command(params, task_id=None):
         )
     elif (
         isinstance(params, ImageClassificationParams)
+        or isinstance(params, ImageClassificationCustomParams)
         or isinstance(params, ObjectDetectionParams)
         or isinstance(params, ImageRegressionParams)
     ):

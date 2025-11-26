@@ -8,6 +8,7 @@ from autotrain.trainers.clm.params import LLMTrainingParams
 from autotrain.trainers.extractive_question_answering.params import ExtractiveQuestionAnsweringParams
 from autotrain.trainers.generic.params import GenericParams
 from autotrain.trainers.image_classification.params import ImageClassificationParams
+from autotrain.trainers.image_classification_custom.params import ImageClassificationParams as ImageClassificationCustomParams
 from autotrain.trainers.image_regression.params import ImageRegressionParams
 from autotrain.trainers.object_detection.params import ObjectDetectionParams
 from autotrain.trainers.sent_transformers.params import SentenceTransformersParams
@@ -54,7 +55,7 @@ def run_training(params, task_id, local=False, wait=False):
     elif task_id == 18:
         params = ImageClassificationParams(**params)
     elif task_id == 118:
-        params = ImageClassificationParams(**params)
+        params = ImageClassificationCustomParams(**params)
     elif task_id == 4:
         params = TokenClassificationParams(**params)
     elif task_id == 10:
