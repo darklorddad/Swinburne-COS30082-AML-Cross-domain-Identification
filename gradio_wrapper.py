@@ -395,16 +395,25 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
         
         # 1. Prediction (No Grad)
         with torch.no_grad():
-            if "pixel_values" in inputs:
-                try:
+            try:
+                if "pixel_values" in inputs:
+                    try:
+                        outputs = model(**inputs)
+                    except TypeError:
+                        outputs = model(inputs["pixel_values"])
+                else:
                     outputs = model(**inputs)
-                except TypeError:
-                    outputs = model(inputs["pixel_values"])
-            else:
-                outputs = model(**inputs)
+            except TypeError:
+                # Fallback for models with ImageClassifierOutput init issues
+                if "pixel_values" in inputs:
+                    outputs = model(inputs["pixel_values"], return_dict=False)
+                else:
+                    outputs = model(**inputs, return_dict=False)
 
         if hasattr(outputs, "logits"):
             logits = outputs.logits
+        elif isinstance(outputs, tuple):
+            logits = outputs[0]
         else:
             logits = outputs
 
@@ -474,16 +483,28 @@ def extract_features_and_logits(model, processor, batch_images, device, model_ty
             # Try to get hidden states
             try:
                 outputs = model(**inputs, output_hidden_states=True)
-            except TypeError:
-                # Model might not support output_hidden_states kwarg or **inputs
-                if "pixel_values" in inputs:
-                    outputs = model(inputs["pixel_values"])
-                else:
-                    outputs = model(**inputs)
+            except (TypeError, ValueError):
+                # Try return_dict=False to bypass ImageClassifierOutput init errors (e.g. pooler_output issue)
+                try:
+                    outputs = model(**inputs, output_hidden_states=True, return_dict=False)
+                except (TypeError, ValueError):
+                    # Model might not support output_hidden_states kwarg or **inputs
+                    try:
+                        if "pixel_values" in inputs:
+                            outputs = model(inputs["pixel_values"])
+                        else:
+                            outputs = model(**inputs)
+                    except (TypeError, ValueError):
+                        if "pixel_values" in inputs:
+                            outputs = model(inputs["pixel_values"], return_dict=False)
+                        else:
+                            outputs = model(**inputs, return_dict=False)
 
             # Determine Logits
             if hasattr(outputs, "logits"):
                 logits = outputs.logits
+            elif isinstance(outputs, tuple):
+                logits = outputs[0]
             else:
                 logits = outputs
 
@@ -498,10 +519,26 @@ def extract_features_and_logits(model, processor, batch_images, device, model_ty
                     batch_emb_numpy = last_hidden.mean(dim=1).cpu().numpy()
                 else:
                     batch_emb_numpy = last_hidden.cpu().numpy()
+            elif isinstance(outputs, tuple) and len(outputs) > 1:
+                # Handle tuple output (logits, hidden_states, ...)
+                possible_hidden = outputs[1]
+                if isinstance(possible_hidden, (tuple, list)) and len(possible_hidden) > 0 and isinstance(possible_hidden[0], torch.Tensor):
+                    last_hidden = possible_hidden[-1]
+                    if last_hidden.dim() == 4:
+                        batch_emb_numpy = last_hidden.mean(dim=[2, 3]).cpu().numpy()
+                    elif last_hidden.dim() == 3:
+                        batch_emb_numpy = last_hidden.mean(dim=1).cpu().numpy()
+                    else:
+                        batch_emb_numpy = last_hidden.cpu().numpy()
+                else:
+                    # Fallback if tuple structure isn't as expected
+                    print("WARNING: Feature extraction failed (tuple output)! Falling back to logits.")
+                    batch_emb_numpy = logits.cpu().numpy() if isinstance(logits, torch.Tensor) else logits
+                    fallback_to_logits = True
             else:
                 # LOUD FAILURE for feature extraction
                 print("WARNING: Feature extraction failed! Model does not return hidden_states or pooler_output. Falling back to logits.")
-                batch_emb_numpy = logits.cpu().numpy()
+                batch_emb_numpy = logits.cpu().numpy() if isinstance(logits, torch.Tensor) else logits
                 fallback_to_logits = True
 
         elif model_type == "timm":
