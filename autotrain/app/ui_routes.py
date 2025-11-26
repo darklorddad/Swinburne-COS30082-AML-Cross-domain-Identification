@@ -296,62 +296,10 @@ UI_PARAMS = {
         "type": "number",
         "label": "ArcFace Margin (m)",
     },
-    "warmup_epochs": {
-        "type": "number",
-        "label": "Warmup Epochs",
-    },
-    "augment_prob": {
-        "type": "number",
-        "label": "Augment Prob (Jitter)",
-    },
-    "grayscale_prob": {
-        "type": "number",
-        "label": "Grayscale Prob",
-    },
-    "color_jitter_strength": {
-        "type": "number",
-        "label": "Jitter Strength",
-    },
-    "backbone_lr": {
-        "type": "number",
-        "label": "Backbone LR",
-    },
-    "head_lr": {
-        "type": "number",
-        "label": "Head LR",
-    },
     "use_class_balanced_sampler": {
         "type": "dropdown",
         "label": "Class Balanced Sampler",
         "options": [True, False],
-    },
-    "cutout_prob": {
-        "type": "number",
-        "label": "Cutout Prob",
-    },
-    "augment_hue": {
-        "type": "number",
-        "label": "Augment Hue Shift",
-    },
-    "augment_horizontal_flip_prob": {
-        "type": "number",
-        "label": "Horizontal Flip Prob",
-    },
-    "augment_rotate_prob": {
-        "type": "number",
-        "label": "Rotate 90 Prob",
-    },
-    "cutout_max_holes": {
-        "type": "number",
-        "label": "Cutout Max Holes",
-    },
-    "cutout_max_height_ratio": {
-        "type": "number",
-        "label": "Cutout Height Ratio",
-    },
-    "cutout_max_width_ratio": {
-        "type": "number",
-        "label": "Cutout Width Ratio",
     },
 }
 
