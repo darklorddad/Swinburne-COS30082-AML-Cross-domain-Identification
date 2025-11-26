@@ -251,18 +251,24 @@ def process_data(train_data, valid_data, image_processor, config, model=None):
     train_transforms = A.Compose(
         [
             A.RandomResizedCrop(height=height, width=width),
-            A.RandomRotate90(),
-            A.HorizontalFlip(p=0.5),
+            A.RandomRotate90(p=config.augment_rotate_prob),
+            A.HorizontalFlip(p=config.augment_horizontal_flip_prob),
             # Domain Erasing Augmentations (Configurable)
             A.ColorJitter(
                 brightness=config.color_jitter_strength,
                 contrast=config.color_jitter_strength,
                 saturation=config.color_jitter_strength,
-                hue=0.1,
+                hue=config.augment_hue,
                 p=config.augment_prob,
             ),
             A.ToGray(p=config.grayscale_prob),
-            A.CoarseDropout(max_holes=8, max_height=height // 8, max_width=width // 8, fill_value=0, p=config.cutout_prob),
+            A.CoarseDropout(
+                max_holes=config.cutout_max_holes,
+                max_height=int(height * config.cutout_max_height_ratio),
+                max_width=int(width * config.cutout_max_width_ratio),
+                fill_value=0,
+                p=config.cutout_prob,
+            ),
             A.Normalize(mean=mean, std=std),
         ]
     )

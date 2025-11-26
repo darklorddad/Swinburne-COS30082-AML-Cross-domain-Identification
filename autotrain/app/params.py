@@ -108,6 +108,12 @@ PARAMS["image-classification-custom"] = ImageClassificationCustomParams(
     head_lr=1e-3,
     use_class_balanced_sampler=False,
     cutout_prob=0.0,
+    augment_hue=0.1,
+    augment_horizontal_flip_prob=0.5,
+    augment_rotate_prob=0.5,
+    cutout_max_holes=8,
+    cutout_max_height_ratio=0.125,
+    cutout_max_width_ratio=0.125,
 ).model_dump()
 PARAMS["image-object-detection"] = ObjectDetectionParams(
     mixed_precision="fp16",
