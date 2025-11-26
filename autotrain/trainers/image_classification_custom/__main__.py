@@ -254,16 +254,6 @@ def train(config):
     if config.push_to_hub and config.username != "local":
         callbacks_to_use.insert(0, UploadLogs(config=config))
 
-    # --- STEP 1: WARMUP (Linear Probe) ---
-    logger.info("--- STEP A: WARMUP (Freezing Backbone) ---")
-    for param in model.backbone.parameters():
-        param.requires_grad = False
-
-    warmup_args_dict = training_args_dict.copy()
-    warmup_args_dict["num_train_epochs"] = config.warmup_epochs
-    warmup_args_dict["learning_rate"] = config.head_lr
-    warmup_args_dict["output_dir"] = os.path.join(config.project_name, "warmup")
-
     # Calculate class weights for sampler if enabled
     class_weights = None
     if config.use_class_balanced_sampler:
@@ -310,45 +300,6 @@ def train(config):
         else:
             logger.warning(f"Could not find {filename} in {script_dir}. AutoModel loading might fail.")
 
-
-    trainer_warmup = CustomTrainer(
-        class_weights=class_weights,
-        custom_config=custom_config,
-        image_processor=image_processor,
-        args=TrainingArguments(**warmup_args_dict),
-        model=model,
-        train_dataset=train_data,
-        eval_dataset=valid_data,
-    )
-    trainer_warmup.train()
-
-    # --- STEP 2: FINE-TUNING (Unfreeze) ---
-    logger.info("--- STEP B: FINE-TUNING (Unfreezing Backbone) ---")
-    for param in model.backbone.parameters():
-        param.requires_grad = True
-
-    logger.info(f"Using backbone_lr: {config.backbone_lr}")
-    logger.info(f"Using head_lr: {config.head_lr}")
-    logger.info(f"Using optimizer: {config.optimizer}")
-
-    # Differential Learning Rates
-    backbone_params = list(map(id, model.backbone.parameters()))
-    head_params = filter(lambda p: id(p) not in backbone_params, model.parameters())
-
-    optimizer_cls = torch.optim.AdamW
-    if config.optimizer == "adam":
-        optimizer_cls = torch.optim.Adam
-    elif config.optimizer == "sgd":
-        optimizer_cls = torch.optim.SGD
-
-    optimizer = optimizer_cls(
-        [
-            {"params": model.backbone.parameters(), "lr": config.backbone_lr},
-            {"params": head_params, "lr": config.head_lr},
-        ],
-        weight_decay=config.weight_decay,
-    )
-
     args = TrainingArguments(**training_args_dict)
 
     trainer = CustomTrainer(
@@ -363,7 +314,6 @@ def train(config):
         ),
         train_dataset=train_data,
         eval_dataset=valid_data,
-        optimizers=(optimizer, None),
     )
     trainer.remove_callback(PrinterCallback)
     trainer.train()

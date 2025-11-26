@@ -7,18 +7,6 @@ import math
 import timm
 from .configuration_arcface import ArcFaceConfig
 
-class GeM(nn.Module):
-    def __init__(self, p=3, eps=1e-6):
-        super(GeM, self).__init__()
-        self.p = nn.Parameter(torch.ones(1) * p)
-        self.eps = eps
-
-    def forward(self, x):
-        return self.gem(x, p=self.p, eps=self.eps)
-
-    def gem(self, x, p=3, eps=1e-6):
-        return F.avg_pool2d(x.clamp(min=eps).pow(p), (x.size(-2), x.size(-1))).pow(1.0 / p)
-
 class ArcFaceClassifier(PreTrainedModel):
     config_class = ArcFaceConfig
 
@@ -35,7 +23,7 @@ class ArcFaceClassifier(PreTrainedModel):
 
         # Create backbone
         # We assume pretrained=False because we are loading weights from safetensors/bin immediately after
-        self.backbone = timm.create_model(config.backbone, pretrained=False, num_classes=0, global_pool="")
+        self.backbone = timm.create_model(config.backbone, pretrained=False, num_classes=0, global_pool="avg")
 
         # Auto-detect feature dimension
         try:
@@ -52,7 +40,6 @@ class ArcFaceClassifier(PreTrainedModel):
         except Exception:
             feat_dim = 768  # Fallback
 
-        self.pooling = GeM()
         self.bn = nn.BatchNorm1d(feat_dim)
         self.weight = nn.Parameter(torch.FloatTensor(config.num_classes, feat_dim))
         nn.init.xavier_uniform_(self.weight)
@@ -67,12 +54,14 @@ class ArcFaceClassifier(PreTrainedModel):
         features = raw_features
 
         # Handle different backbone output shapes
-        if len(features.shape) == 4:  # CNNs: (B, C, H, W)
-            features = self.pooling(features).flatten(1)
-        elif len(features.shape) == 3:  # Transformers: (B, N, C)
-            features = features.mean(dim=1)
-        elif len(features.shape) == 2:  # Already pooled (B, C)
-            pass
+        if len(features.shape) == 4:  # CNNs: (B, C, H, W) -> (B, C, 1, 1) -> (B, C)
+            features = features.flatten(1)
+        elif len(features.shape) == 3:  # Transformers: (B, N, C) -> (B, C)
+            if features.shape[1] != 1 and features.shape[1] != features.shape[-1]:
+                features = features.mean(dim=1)
+        
+        if len(features.shape) > 2:
+            features = features.flatten(1)
 
         features = self.bn(features)
 

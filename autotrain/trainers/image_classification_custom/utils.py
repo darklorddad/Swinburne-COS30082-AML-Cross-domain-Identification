@@ -96,36 +96,11 @@ def _multi_class_classification_metrics(pred):
     return results
 
 
-class GeM(nn.Module):
-    def __init__(self, p=3, eps=1e-6):
-        super(GeM, self).__init__()
-        self.p = nn.Parameter(torch.ones(1) * p)
-        self.eps = eps
-
-    def forward(self, x):
-        return self.gem(x, p=self.p, eps=self.eps)
-
-    def gem(self, x, p=3, eps=1e-6):
-        return F.avg_pool2d(x.clamp(min=eps).pow(p), (x.size(-2), x.size(-1))).pow(1.0 / p)
-
-    def __repr__(self):
-        return (
-            self.__class__.__name__
-            + "("
-            + "p="
-            + "{:.4f}".format(self.p.data.tolist()[0])
-            + ", "
-            + "eps="
-            + str(self.eps)
-            + ")"
-        )
-
-
 class ArcFaceClassifier(nn.Module):
     def __init__(self, model_name, num_classes, s=30.0, m=0.50, pretrained=True):
         super().__init__()
         # Create backbone without the classification head (num_classes=0)
-        # global_pool='' ensures we get spatial features for CNNs to apply GeM
+        # global_pool='avg' ensures we get pooled features
 
         # Sanitize model name for timm
         if "/" in model_name:
@@ -140,7 +115,7 @@ class ArcFaceClassifier(nn.Module):
         self.backbone = None
         for name in candidates:
             try:
-                self.backbone = timm.create_model(name, pretrained=pretrained, num_classes=0, global_pool="")
+                self.backbone = timm.create_model(name, pretrained=pretrained, num_classes=0, global_pool="avg")
                 break
             except Exception:
                 pass
@@ -163,7 +138,6 @@ class ArcFaceClassifier(nn.Module):
         except Exception:
             feat_dim = 768  # Fallback
 
-        self.pooling = GeM()
         self.bn = nn.BatchNorm1d(feat_dim)
         self.weight = nn.Parameter(torch.FloatTensor(num_classes, feat_dim))
         nn.init.xavier_uniform_(self.weight)
@@ -180,12 +154,14 @@ class ArcFaceClassifier(nn.Module):
         features = self.backbone(pixel_values)
 
         # Handle different backbone output shapes
-        if len(features.shape) == 4:  # CNNs: (B, C, H, W)
-            features = self.pooling(features).flatten(1)
-        elif len(features.shape) == 3:  # Transformers: (B, N, C)
-            features = features.mean(dim=1)
-        elif len(features.shape) == 2:  # Already pooled (B, C)
-            pass
+        if len(features.shape) == 4:  # CNNs: (B, C, H, W) -> (B, C, 1, 1) -> (B, C)
+            features = features.flatten(1)
+        elif len(features.shape) == 3:  # Transformers: (B, N, C) -> (B, C)
+            if features.shape[1] != 1 and features.shape[1] != features.shape[-1]:
+                features = features.mean(dim=1)
+        
+        if len(features.shape) > 2:
+            features = features.flatten(1)
 
         features = self.bn(features)
 
@@ -251,24 +227,9 @@ def process_data(train_data, valid_data, image_processor, config, model=None):
     train_transforms = A.Compose(
         [
             A.RandomResizedCrop(height=height, width=width),
-            A.RandomRotate90(p=config.augment_rotate_prob),
-            A.HorizontalFlip(p=config.augment_horizontal_flip_prob),
-            # Domain Erasing Augmentations (Configurable)
-            A.ColorJitter(
-                brightness=config.color_jitter_strength,
-                contrast=config.color_jitter_strength,
-                saturation=config.color_jitter_strength,
-                hue=config.augment_hue,
-                p=config.augment_prob,
-            ),
-            A.ToGray(p=config.grayscale_prob),
-            A.CoarseDropout(
-                max_holes=config.cutout_max_holes,
-                max_height=int(height * config.cutout_max_height_ratio),
-                max_width=int(width * config.cutout_max_width_ratio),
-                fill_value=0,
-                p=config.cutout_prob,
-            ),
+            A.RandomRotate90(),
+            A.HorizontalFlip(p=0.5),
+            A.RandomBrightnessContrast(p=0.2),
             A.Normalize(mean=mean, std=std),
         ]
     )
