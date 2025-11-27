@@ -21,7 +21,7 @@ def main():
     device = torch.device(config.DEVICE)
     print(f"Using device: {device}")
     print(f"Evaluating Model: {config.MODEL_NAME}")
-    print(f"Data Mode: {config.DATA_MODE}")
+    print(f"Class Mode: {config.CLASS_MODE}")
 
     # 2. Load Class Mappings (Required for Detailed Metrics)
     with_pairs_path = os.path.join(config.DATA_DIR, 'list/class_with_pairs.txt')
@@ -66,7 +66,7 @@ def main():
     elif config.MODEL_NAME == 'xception': base_save_path = config.MODEL_SAVE_PATH_XCEPTION
     
     filename, ext = os.path.splitext(base_save_path)
-    save_path = f"{filename}_{config.DATA_MODE}{ext}"
+    save_path = f"{filename}_{config.CLASS_MODE}{ext}"
 
     if not os.path.exists(save_path):
         print(f"\nERROR: Model file not found at {save_path}")
@@ -107,13 +107,13 @@ def main():
     print("=======================================================")
 
     # 8. Save Detailed Metrics to JSON
-    json_save_path = f"results_{config.MODEL_NAME}_{config.DATA_MODE}.json"
+    json_save_path = f"results_{config.MODEL_NAME}_{config.CLASS_MODE}.json"
     with open(json_save_path, 'w') as f:
         json.dump(performance['JSON_Stats'], f, indent=4)
     print(f"Detailed JSON metrics saved to {json_save_path}")
 
     # 9. Generate/Regenerate Plots (Optional but helpful)
-    cm_save_path = f"confusion_matrix_{config.MODEL_NAME}_{config.DATA_MODE}.png"
+    cm_save_path = f"confusion_matrix_{config.MODEL_NAME}_{config.CLASS_MODE}.png"
     plot_utils.plot_confusion_matrix(
         performance['All Labels'], 
         performance['All Predictions'], 

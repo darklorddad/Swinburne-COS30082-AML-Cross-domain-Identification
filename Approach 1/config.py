@@ -5,7 +5,8 @@ import os
 DATA_DIR = '.' 
 TRAIN_LIST = 'list/train.txt'
 TEST_LIST = 'list/groundtruth.txt' # We use this file because it has the labels for the test images.
-DATA_MODE = 'herbarium' # Options: 'all', 'herbarium', 'photo'
+DATA_MODE = 'all' 
+CLASS_MODE = 'mixed' # Options: 'with_pairs', 'without_pairs', 'mixed' (all classes)
 
 # Model Configurations
 # CHOOSE YOUR MODEL HERE: 'resnet50', 'convnextv2', or 'xception'

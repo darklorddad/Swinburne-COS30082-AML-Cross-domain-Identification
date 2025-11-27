@@ -36,18 +36,31 @@ def main():
     with_pairs_df = pd.read_csv(with_pairs_path, header=None, names=['class_id'])
     without_pairs_df = pd.read_csv(without_pairs_path, header=None, names=['class_id'])
 
-    # Combine them, drop any missing values, and ensure the IDs are integers.
-    species_df = pd.concat([with_pairs_df, without_pairs_df]).dropna()
-    species_df['class_id'] = species_df['class_id'].astype(int)
+    # Convert to integers
+    with_pairs_df['class_id'] = with_pairs_df['class_id'].astype(int)
+    without_pairs_df['class_id'] = without_pairs_df['class_id'].astype(int)
     
-    species_to_consider = species_df['class_id'].tolist()
+    # Filter classes based on CLASS_MODE
+    if config.CLASS_MODE == 'with_pairs':
+        # Only use classes that have pairs (both herbarium and field photos)
+        species_to_consider = with_pairs_df['class_id'].tolist()
+        print(f"Using {len(species_to_consider)} classes WITH pairs")
+    elif config.CLASS_MODE == 'without_pairs':
+        # Only use classes that don't have pairs (herbarium only)
+        species_to_consider = without_pairs_df['class_id'].tolist()
+        print(f"Using {len(species_to_consider)} classes WITHOUT pairs")
+    else:  # 'mixed' or 'all'
+        # Use all classes (both with and without pairs)
+        species_to_consider = pd.concat([with_pairs_df, without_pairs_df])['class_id'].dropna().astype(int).tolist()
+        print(f"Using {len(species_to_consider)} classes (MIXED: {len(with_pairs_df)} with pairs, {len(without_pairs_df)} without pairs)")
     
     # Create a mapping from the original class ID (e.g., 125412) to a new, zero-based index (e.g., 5).
     class_to_idx = {class_id: i for i, class_id in enumerate(species_to_consider)}
     
-    # Verify that the number of classes in the list matches your configuration.
-    if len(class_to_idx) != config.NUM_CLASSES:
-        print(f"Warning: The number of classes from the lists ({len(class_to_idx)}) does not match NUM_CLASSES in config.py ({config.NUM_CLASSES}).")
+    # Also create reverse mapping and sets for later use
+    idx_to_class = {i: class_id for class_id, i in class_to_idx.items()}
+    with_pairs_set = set(with_pairs_df['class_id'].tolist())
+    without_pairs_set = set(without_pairs_df['class_id'].tolist())
 
     # Load the full training data list
     full_train_df = pd.read_csv(os.path.join(config.DATA_DIR, config.TRAIN_LIST), sep=' ', header=None, names=['image_path', 'class_id'])
@@ -61,30 +74,30 @@ def main():
     full_train_df.dropna(subset=['class_id'], inplace=True)
     full_train_df['class_id'] = full_train_df['class_id'].astype(int)
     
-    # Apply DATA_MODE filtering if specified (before domain-aware split)
-    if config.DATA_MODE == 'herbarium':
-        full_train_df = full_train_df[full_train_df['image_path'].str.contains('herbarium')].copy()
-    elif config.DATA_MODE == 'photo':
-        full_train_df = full_train_df[full_train_df['image_path'].str.contains('photo')].copy()
-    # If 'all', no filtering needed
+    # Domain-aware train/val split based on class type
+    # Strategy:
+    # - WITH PAIRS classes: val = field photos, train = herbarium + leftover field photos
+    # - WITHOUT PAIRS classes: val = herbarium, train = herbarium (rest)
+    # - MIXED: Apply above logic per class type
     
-    # Domain-aware train/val split for cross-domain evaluation
-    # Goal: Validation should have field photos only (when available)
-    # Strategy: Separate by domain, then split intelligently
     herbarium_df = full_train_df[full_train_df['image_path'].str.contains('herbarium')].copy()
     photo_df = full_train_df[full_train_df['image_path'].str.contains('photo')].copy()
     
     train_df_list = []
     val_df_list = []
     
-    # For each class, determine train/val split
+    # For each class, determine train/val split based on class type
     for class_id in full_train_df['class_id'].unique():
+        # Get original class ID to check if it's with_pairs or without_pairs
+        original_class_id = idx_to_class[class_id]
+        is_with_pairs = original_class_id in with_pairs_set
+        
         class_herbarium = herbarium_df[herbarium_df['class_id'] == class_id]
         class_photo = photo_df[photo_df['class_id'] == class_id]
         
-        if len(class_photo) > 0:
-            # Class has field photos: Use photos for validation, herbarium + leftover photos for training
-            # Split photos: 80% train, 20% val (or use all photos for val if small)
+        if is_with_pairs and len(class_photo) > 0:
+            # WITH PAIRS: Validation = field photos, Training = herbarium + leftover field photos
+            # Split field photos: use ~20% for validation, rest for training
             if len(class_photo) >= 5:
                 photo_train, photo_val = train_test_split(
                     class_photo, test_size=0.2, random_state=42, stratify=None
@@ -94,13 +107,15 @@ def main():
                 photo_train = class_photo.iloc[:0].copy()  # Empty
                 photo_val = class_photo.copy()
             
-            # Training: All herbarium + leftover photos
+            # Training: All herbarium + leftover field photos
             train_df_list.append(class_herbarium)
             train_df_list.append(photo_train)
             # Validation: Field photos only
             val_df_list.append(photo_val)
+            
         else:
-            # No field photos: Use herbarium for both, but split it
+            # WITHOUT PAIRS (or WITH PAIRS but no field photos available): 
+            # Validation = herbarium, Training = herbarium (rest)
             if len(class_herbarium) >= 2:
                 herb_train, herb_val = train_test_split(
                     class_herbarium, test_size=0.2, random_state=42, stratify=None
@@ -115,7 +130,7 @@ def main():
     train_df = pd.concat(train_df_list, ignore_index=True) if train_df_list else pd.DataFrame()
     val_df = pd.concat(val_df_list, ignore_index=True) if val_df_list else pd.DataFrame()
     
-    print(f"\nDomain-aware split summary:")
+    print(f"\nDomain-aware split summary (CLASS_MODE: {config.CLASS_MODE}):")
     print(f"  Training: {len(train_df)} images ({len(train_df[train_df['image_path'].str.contains('herbarium')])} herbarium, {len(train_df[train_df['image_path'].str.contains('photo')])} photo)")
     print(f"  Validation: {len(val_df)} images ({len(val_df[val_df['image_path'].str.contains('herbarium')])} herbarium, {len(val_df[val_df['image_path'].str.contains('photo')])} photo)")
 
@@ -200,7 +215,7 @@ def main():
     epochs_no_improve = 0
     
     # Initialize CSV Logger
-    log_file = f"history_{config.MODEL_NAME}_{config.DATA_MODE}.csv"
+    log_file = f"history_{config.MODEL_NAME}_{config.CLASS_MODE}.csv"
     with open(log_file, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['epoch', 'train_loss', 'train_acc', 'val_loss', 'val_acc'])
@@ -239,9 +254,9 @@ def main():
             elif config.MODEL_NAME == 'convnextv2': base_save_path = config.MODEL_SAVE_PATH_CONVNEXTV2
             elif config.MODEL_NAME == 'xception': base_save_path = config.MODEL_SAVE_PATH_XCEPTION
             
-            # Construct dynamic save path with DATA_MODE
+            # Construct dynamic save path with CLASS_MODE
             filename, ext = os.path.splitext(base_save_path)
-            save_path = f"{filename}_{config.DATA_MODE}{ext}"
+            save_path = f"{filename}_{config.CLASS_MODE}{ext}"
             
             torch.save(model.state_dict(), save_path)
             print(f"✨ New best model saved to {save_path} with accuracy: {best_val_acc*100:.2f}%")
@@ -301,7 +316,7 @@ def main():
     print(f"\nBest model weights are saved in {save_path}")
 
     # --- Save Detailed Metrics to JSON ---
-    json_save_path = f"results_{config.MODEL_NAME}_{config.DATA_MODE}.json"
+    json_save_path = f"results_{config.MODEL_NAME}_{config.CLASS_MODE}.json"
     with open(json_save_path, 'w') as f:
         json.dump(performance['JSON_Stats'], f, indent=4)
     print(f"Detailed JSON metrics saved to {json_save_path}")
@@ -310,7 +325,7 @@ def main():
     print("\nGenerating plots...")
     plot_utils.plot_training_history(log_file)
     
-    cm_save_path = f"confusion_matrix_{config.MODEL_NAME}_{config.DATA_MODE}.png"
+    cm_save_path = f"confusion_matrix_{config.MODEL_NAME}_{config.CLASS_MODE}.png"
     plot_utils.plot_confusion_matrix(
         performance['All Labels'], 
         performance['All Predictions'], 
