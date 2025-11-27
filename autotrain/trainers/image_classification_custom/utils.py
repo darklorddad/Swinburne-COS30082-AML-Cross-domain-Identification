@@ -97,7 +97,7 @@ def _multi_class_classification_metrics(pred):
 
 
 class ArcFaceClassifier(nn.Module):
-    def __init__(self, model_name, num_classes, s=30.0, m=0.50, pretrained=True):
+    def __init__(self, model_name, num_classes, s=30.0, m=0.50, k=1, pretrained=True):
         super().__init__()
         # Create backbone without the classification head (num_classes=0)
         # global_pool='avg' ensures we get pooled features
@@ -139,11 +139,12 @@ class ArcFaceClassifier(nn.Module):
             feat_dim = 768  # Fallback
 
         self.bn = nn.BatchNorm1d(feat_dim)
-        self.weight = nn.Parameter(torch.FloatTensor(num_classes, feat_dim))
+        self.weight = nn.Parameter(torch.FloatTensor(num_classes * k, feat_dim))
         nn.init.xavier_uniform_(self.weight)
 
         self.s = s
         self.m = m
+        self.k = k
         self.cos_m = math.cos(m)
         self.sin_m = math.sin(m)
         self.th = math.cos(math.pi - m)
@@ -159,7 +160,7 @@ class ArcFaceClassifier(nn.Module):
         elif len(features.shape) == 3:  # Transformers: (B, N, C) -> (B, C)
             if features.shape[1] != 1 and features.shape[1] != features.shape[-1]:
                 features = features.mean(dim=1)
-        
+
         if len(features.shape) > 2:
             features = features.flatten(1)
 
@@ -167,6 +168,10 @@ class ArcFaceClassifier(nn.Module):
 
         # Calculate logits (cosine similarity)
         cosine = F.linear(F.normalize(features), F.normalize(self.weight))
+
+        if self.k > 1:
+            cosine = torch.reshape(cosine, (-1, self.weight.shape[0] // self.k, self.k))
+            cosine, _ = torch.max(cosine, axis=2)
 
         # If labels are provided (Training or Eval)
         if labels is not None:

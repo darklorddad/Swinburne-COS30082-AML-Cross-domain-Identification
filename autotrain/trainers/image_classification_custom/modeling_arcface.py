@@ -15,6 +15,7 @@ class ArcFaceClassifier(PreTrainedModel):
 
         self.s = config.arcface_s
         self.m = config.arcface_m
+        self.k = config.arcface_k
         self.cos_m = math.cos(self.m)
         self.sin_m = math.sin(self.m)
         self.th = math.cos(math.pi - self.m)
@@ -41,7 +42,7 @@ class ArcFaceClassifier(PreTrainedModel):
             feat_dim = 768  # Fallback
 
         self.bn = nn.BatchNorm1d(feat_dim)
-        self.weight = nn.Parameter(torch.FloatTensor(config.num_classes, feat_dim))
+        self.weight = nn.Parameter(torch.FloatTensor(config.num_classes * self.k, feat_dim))
         nn.init.xavier_uniform_(self.weight)
 
     def forward(self, pixel_values, labels=None, output_hidden_states=None, return_dict=None):
@@ -59,7 +60,7 @@ class ArcFaceClassifier(PreTrainedModel):
         elif len(features.shape) == 3:  # Transformers: (B, N, C) -> (B, C)
             if features.shape[1] != 1 and features.shape[1] != features.shape[-1]:
                 features = features.mean(dim=1)
-        
+
         if len(features.shape) > 2:
             features = features.flatten(1)
 
@@ -67,7 +68,11 @@ class ArcFaceClassifier(PreTrainedModel):
 
         # Calculate logits (cosine similarity)
         cosine = F.linear(F.normalize(features), F.normalize(self.weight))
-        
+
+        if self.k > 1:
+            cosine = torch.reshape(cosine, (-1, self.weight.shape[0] // self.k, self.k))
+            cosine, _ = torch.max(cosine, axis=2)
+
         loss = None
         logits = cosine * self.s
 
@@ -84,9 +89,9 @@ class ArcFaceClassifier(PreTrainedModel):
                 output = (one_hot * phi) + ((1.0 - one_hot) * cosine)
                 output *= self.s
                 logits = output
-            
+
             loss = self.loss_fn(logits, labels)
-        
+
         if not return_dict:
             if labels is not None:
                 return {"loss": loss, "logits": logits}

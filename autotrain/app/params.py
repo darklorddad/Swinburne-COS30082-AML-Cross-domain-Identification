@@ -101,6 +101,7 @@ PARAMS["image-classification-custom"] = ImageClassificationCustomParams(
     log="tensorboard",
     arcface_s=30.0,
     arcface_m=0.5,
+    arcface_k=1,
     use_class_balanced_sampler=False,
 ).model_dump()
 PARAMS["image-object-detection"] = ObjectDetectionParams(

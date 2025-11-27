@@ -296,6 +296,10 @@ UI_PARAMS = {
         "type": "number",
         "label": "ArcFace Margin (m)",
     },
+    "arcface_k": {
+        "type": "number",
+        "label": "ArcFace Subcenters (k)",
+    },
     "use_class_balanced_sampler": {
         "type": "dropdown",
         "label": "Class Balanced Sampler",

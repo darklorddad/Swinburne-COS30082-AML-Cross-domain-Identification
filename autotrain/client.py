@@ -64,6 +64,7 @@ PARAMS["image-classification-custom"] = {
     "log": "tensorboard",
     "arcface_s": 30.0,
     "arcface_m": 0.5,
+    "arcface_k": 1,
     "warmup_epochs": 5,
     "use_class_balanced_sampler": False,
     "cutout_prob": 0.0,

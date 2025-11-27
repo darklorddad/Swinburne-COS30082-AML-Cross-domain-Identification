@@ -179,6 +179,7 @@ def train(config):
         num_classes=num_classes,
         s=config.arcface_s,
         m=config.arcface_m,
+        k=config.arcface_k,
     )
 
     # Image Processor (mostly for consistency/saving, logic is in utils)
@@ -284,6 +285,7 @@ def train(config):
         "num_classes": num_classes,
         "arcface_s": config.arcface_s,
         "arcface_m": config.arcface_m,
+        "arcface_k": config.arcface_k,
         "image_size": image_size,
         "id2label": {i: c for i, c in enumerate(classes)},
         "label2id": label2id,
