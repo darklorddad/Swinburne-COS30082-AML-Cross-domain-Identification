@@ -3,6 +3,124 @@ import shutil
 import re
 import random
 import gradio as gr
+import matplotlib.pyplot as plt
+import numpy as np
+
+def check_dataset_balance_custom(source_dir, save_files, chart_save_path, manifest_save_path):
+    if not source_dir or not os.path.isdir(source_dir):
+        raise gr.Error("Please provide a valid source directory.")
+
+    try:
+        class_stats = {}
+        
+        for root, dirs, files in os.walk(source_dir):
+            if not dirs:  # Leaf directory
+                if os.path.abspath(root) != os.path.abspath(source_dir):
+                    class_name = os.path.basename(root)
+                    
+                    herb_count = 0
+                    photo_count = 0
+                    other_count = 0
+                    
+                    for f in files:
+                        fname_lower = f.lower()
+                        if not fname_lower.endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+                            continue
+                        
+                        if "herbarium" in fname_lower:
+                            herb_count += 1
+                        elif "photo" in fname_lower:
+                            photo_count += 1
+                        else:
+                            other_count += 1
+                    
+                    total = herb_count + photo_count + other_count
+                    if total > 0:
+                        class_stats[class_name] = {
+                            'total': total,
+                            'herbarium': herb_count,
+                            'photo': photo_count,
+                            'other': other_count
+                        }
+
+        if not class_stats:
+            return None, "No leaf directories with items found in the source directory."
+
+        # Sort by total count
+        sorted_stats = sorted(class_stats.items(), key=lambda item: item[1]['total'], reverse=True)
+        
+        classes = [x[0] for x in sorted_stats]
+        herb_counts = [x[1]['herbarium'] for x in sorted_stats]
+        photo_counts = [x[1]['photo'] for x in sorted_stats]
+        other_counts = [x[1]['other'] for x in sorted_stats]
+        
+        fig, ax = plt.subplots(figsize=(12, 7))
+        
+        indices = np.arange(len(classes))
+        width = 0.5
+        
+        p1 = ax.bar(indices, herb_counts, width, label='Herbarium')
+        p2 = ax.bar(indices, photo_counts, width, bottom=herb_counts, label='Photo')
+        # Stack 'other' on top if any
+        bottom_other = np.array(herb_counts) + np.array(photo_counts)
+        p3 = ax.bar(indices, other_counts, width, bottom=bottom_other, label='Other')
+        
+        ax.set_title('Dataset Balance (Herbarium vs Photo)')
+        ax.set_xlabel('Class')
+        ax.set_ylabel('Number of Items')
+        ax.set_xticks(indices)
+        ax.set_xticklabels(classes, rotation=45, ha='right')
+        ax.legend()
+        ax.grid(True, axis='y', linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        
+        status_messages = ["Successfully generated balance chart and statistics."]
+        report_lines = ["\n## Dataset Statistics (Custom)"]
+        
+        total_items = sum(d['total'] for d in class_stats.values())
+        total_herb = sum(d['herbarium'] for d in class_stats.values())
+        total_photo = sum(d['photo'] for d in class_stats.values())
+        total_other = sum(d['other'] for d in class_stats.values())
+        
+        report_lines.append(f"Total Classes: {len(class_stats)}")
+        report_lines.append(f"Total Items: {total_items}")
+        report_lines.append(f"Total Herbarium: {total_herb}")
+        report_lines.append(f"Total Photo: {total_photo}")
+        if total_other > 0:
+            report_lines.append(f"Total Other: {total_other}")
+        
+        report_lines.append("\n### Class Counts")
+        for class_name, stats in sorted_stats:
+            line = f"- {class_name}: Total {stats['total']} (Herb: {stats['herbarium']}, Photo: {stats['photo']}"
+            if stats['other'] > 0:
+                line += f", Other: {stats['other']}"
+            line += ")"
+            report_lines.append(line)
+            
+        status_messages.extend(report_lines)
+        
+        if save_files:
+            if chart_save_path:
+                try:
+                    os.makedirs(os.path.dirname(chart_save_path), exist_ok=True)
+                    fig.savefig(chart_save_path)
+                    status_messages.append(f"Chart saved to: {chart_save_path}")
+                except Exception as e:
+                    status_messages.append(f"Warning: Could not save chart: {e}")
+            
+            if manifest_save_path:
+                try:
+                    os.makedirs(os.path.dirname(manifest_save_path), exist_ok=True)
+                    with open(manifest_save_path, 'w', encoding='utf-8') as f:
+                        f.write('\n'.join(["# Dataset Balance Manifest (Custom)"] + report_lines))
+                    status_messages.append(f"Manifest saved to: {manifest_save_path}")
+                except Exception as e:
+                    status_messages.append(f"Warning: Could not save manifest: {e}")
+
+        return fig, '\n'.join(status_messages)
+
+    except Exception as e:
+        raise gr.Error(f"Failed to check dataset balance: {e}")
 
 def sort_test_dataset(test_dir, destination_dir, groundtruth_path, species_list_path):
     if not os.path.exists(test_dir):

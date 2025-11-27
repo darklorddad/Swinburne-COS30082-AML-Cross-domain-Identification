@@ -9,7 +9,7 @@ from gradio_wrapper import (
     get_placeholder_plot
 )
 try:
-    from custom_utils import custom_sort_dataset, rename_test_images_func, sort_test_dataset, separate_paired_species, split_paired_dataset_custom, split_hybrid_dataset
+    from custom_utils import custom_sort_dataset, rename_test_images_func, sort_test_dataset, separate_paired_species, split_paired_dataset_custom, split_hybrid_dataset, check_dataset_balance_custom
     CUSTOM_UTILS_AVAILABLE = True
 except ImportError:
     CUSTOM_UTILS_AVAILABLE = False
@@ -19,6 +19,7 @@ except ImportError:
     def separate_paired_species(*args, **kwargs): raise gr.Error("custom_utils not available")
     def split_paired_dataset_custom(*args, **kwargs): raise gr.Error("custom_utils not available")
     def split_hybrid_dataset(*args, **kwargs): raise gr.Error("custom_utils not available")
+    def check_dataset_balance_custom(*args, **kwargs): raise gr.Error("custom_utils not available")
 
 DEFAULT_MANIFEST_PATH = os.path.join('core', 'manifest.md').replace(os.sep, '/')
 
@@ -488,6 +489,35 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             )
 
     with gr.Tab("Custom", visible=CUSTOM_UTILS_AVAILABLE):
+        with gr.Accordion("Check Dataset Balance (Custom)", open=False):
+            with gr.Column():
+                cdb_source_dir = gr.Textbox(label="Source directory", value=app_config.get("cdb_source_dir", ""))
+                cdb_source_dir.change(lambda x: save_setting("cdb_source_dir", x), inputs=[cdb_source_dir])
+
+                cdb_save_files = gr.Checkbox(label="Save chart and manifest", value=False)
+                with gr.Column(visible=False) as cdb_save_paths_container:
+                    cdb_chart_save_path = gr.Textbox(label="Chart output path", value=app_config.get("cdb_chart_save_path", ""))
+                    cdb_chart_save_path.change(lambda x: save_setting("cdb_chart_save_path", x), inputs=[cdb_chart_save_path])
+
+                    cdb_manifest_save_path = gr.Textbox(label="Manifest output path", value=app_config.get("cdb_manifest_save_path", ""))
+                    cdb_manifest_save_path.change(lambda x: save_setting("cdb_manifest_save_path", x), inputs=[cdb_manifest_save_path])
+
+                cdb_check_button = gr.Button("Check Balance", variant="primary")
+                cdb_plot = gr.Plot(label="Class distribution")
+                cdb_status_message = gr.Textbox(label="Status", interactive=False, lines=5)
+
+            cdb_save_files.change(
+                fn=lambda x: gr.update(visible=x),
+                inputs=cdb_save_files,
+                outputs=cdb_save_paths_container
+            )
+
+            cdb_check_button.click(
+                fn=check_dataset_balance_custom,
+                inputs=[cdb_source_dir, cdb_save_files, cdb_chart_save_path, cdb_manifest_save_path],
+                outputs=[cdb_plot, cdb_status_message]
+            )
+
         with gr.Accordion("Sort Test Dataset (PlantCLEF)", open=False):
             with gr.Column():
                 std_test_dir = gr.Textbox(label="Test Directory (Flat images)", value=app_config.get("std_test_dir", ""))
@@ -661,7 +691,10 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             config.get("spd_source_dir", ""),
             config.get("spd_output_dir", ""),
             config.get("shd_source_dir", ""),
-            config.get("shd_output_dir", "")
+            config.get("shd_output_dir", ""),
+            config.get("cdb_source_dir", ""),
+            config.get("cdb_chart_save_path", ""),
+            config.get("cdb_manifest_save_path", "")
         ]
 
     demo.load(
@@ -683,7 +716,8 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             rti_test_dir, rti_groundtruth_path, rti_species_list_path,
             sps_source_dir, sps_output_dir,
             spd_source_dir, spd_output_dir,
-            shd_source_dir, shd_output_dir
+            shd_source_dir, shd_output_dir,
+            cdb_source_dir, cdb_chart_save_path, cdb_manifest_save_path
         ]
     )
 
