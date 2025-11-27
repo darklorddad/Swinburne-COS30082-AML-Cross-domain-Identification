@@ -309,12 +309,13 @@ def get_test_set_performance(model, test_loader, device, with_pairs_indices=None
 
     performance_summary = {
         "Top-1 Accuracy": top1_accuracy,
+        "Top-5 Accuracy": stats_output['overall']['top5'] / 100.0,  # Convert from percentage to fraction
         "Average Accuracy Per Class": avg_per_class_accuracy,
         "Mean Precision": precision,
         "Mean Recall": recall,
         "Mean F1-Score": f1,
         "All Predictions": all_preds,
         "All Labels": all_labels_np,
-        "JSON_Stats": stats_output # <--- Added this
+        "JSON_Stats": stats_output
     }
     return performance_summary

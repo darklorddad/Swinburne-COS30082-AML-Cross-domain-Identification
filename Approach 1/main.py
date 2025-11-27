@@ -61,9 +61,63 @@ def main():
     full_train_df.dropna(subset=['class_id'], inplace=True)
     full_train_df['class_id'] = full_train_df['class_id'].astype(int)
     
-    # Split training data into training and validation sets
-    # Stratify ensures that the class distribution is similar in both train and val sets
-    train_df, val_df = train_test_split(full_train_df, test_size=0.2, random_state=42, stratify=full_train_df['class_id'])
+    # Apply DATA_MODE filtering if specified (before domain-aware split)
+    if config.DATA_MODE == 'herbarium':
+        full_train_df = full_train_df[full_train_df['image_path'].str.contains('herbarium')].copy()
+    elif config.DATA_MODE == 'photo':
+        full_train_df = full_train_df[full_train_df['image_path'].str.contains('photo')].copy()
+    # If 'all', no filtering needed
+    
+    # Domain-aware train/val split for cross-domain evaluation
+    # Goal: Validation should have field photos only (when available)
+    # Strategy: Separate by domain, then split intelligently
+    herbarium_df = full_train_df[full_train_df['image_path'].str.contains('herbarium')].copy()
+    photo_df = full_train_df[full_train_df['image_path'].str.contains('photo')].copy()
+    
+    train_df_list = []
+    val_df_list = []
+    
+    # For each class, determine train/val split
+    for class_id in full_train_df['class_id'].unique():
+        class_herbarium = herbarium_df[herbarium_df['class_id'] == class_id]
+        class_photo = photo_df[photo_df['class_id'] == class_id]
+        
+        if len(class_photo) > 0:
+            # Class has field photos: Use photos for validation, herbarium + leftover photos for training
+            # Split photos: 80% train, 20% val (or use all photos for val if small)
+            if len(class_photo) >= 5:
+                photo_train, photo_val = train_test_split(
+                    class_photo, test_size=0.2, random_state=42, stratify=None
+                )
+            else:
+                # Very few photos: use all for validation
+                photo_train = class_photo.iloc[:0].copy()  # Empty
+                photo_val = class_photo.copy()
+            
+            # Training: All herbarium + leftover photos
+            train_df_list.append(class_herbarium)
+            train_df_list.append(photo_train)
+            # Validation: Field photos only
+            val_df_list.append(photo_val)
+        else:
+            # No field photos: Use herbarium for both, but split it
+            if len(class_herbarium) >= 2:
+                herb_train, herb_val = train_test_split(
+                    class_herbarium, test_size=0.2, random_state=42, stratify=None
+                )
+                train_df_list.append(herb_train)
+                val_df_list.append(herb_val)
+            else:
+                # Only 1 image: put in training
+                train_df_list.append(class_herbarium)
+    
+    # Combine all splits
+    train_df = pd.concat(train_df_list, ignore_index=True) if train_df_list else pd.DataFrame()
+    val_df = pd.concat(val_df_list, ignore_index=True) if val_df_list else pd.DataFrame()
+    
+    print(f"\nDomain-aware split summary:")
+    print(f"  Training: {len(train_df)} images ({len(train_df[train_df['image_path'].str.contains('herbarium')])} herbarium, {len(train_df[train_df['image_path'].str.contains('photo')])} photo)")
+    print(f"  Validation: {len(val_df)} images ({len(val_df[val_df['image_path'].str.contains('herbarium')])} herbarium, {len(val_df[val_df['image_path'].str.contains('photo')])} photo)")
 
     # Load the test data list
     test_df = pd.read_csv(os.path.join(config.DATA_DIR, config.TEST_LIST), sep=' ', header=None, names=['image_path', 'class_id'])
@@ -237,7 +291,8 @@ def main():
     print(f"Best Validation Accuracy: {best_val_acc * 100:.2f}%")
     print("-------------------------------------------------------")
     print("Final Test Set Performance (on best model):")
-    print(f"Top-1 Accuracy:             {performance['Top-1 Accuracy']:.4f}")
+    print(f"Top-1 Accuracy:             {performance['Top-1 Accuracy']:.4f} ({performance['Top-1 Accuracy']*100:.2f}%)")
+    print(f"Top-5 Accuracy:             {performance['Top-5 Accuracy']:.4f} ({performance['Top-5 Accuracy']*100:.2f}%)")
     print(f"Average Accuracy Per Class: {performance['Average Accuracy Per Class']:.4f}")
     print(f"Mean Precision:             {performance['Mean Precision']:.4f}")
     print(f"Mean Recall:                {performance['Mean Recall']:.4f}")
