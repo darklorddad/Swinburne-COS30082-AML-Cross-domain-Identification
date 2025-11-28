@@ -28,6 +28,14 @@ import time
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from Src.utils.visualization import (save_training_history, save_metrics_summary,
                                       plot_training_history, plot_overfitting_analysis)
+from Src.utils.detailed_evaluation import (
+    load_class_categories,
+    load_groundtruth,
+    categorize_test_samples,
+    compute_category_metrics,
+    display_detailed_breakdown,
+    save_detailed_results
+)
 
 
 def parse_args():
@@ -70,6 +78,13 @@ def load_features(features_dir):
     val_labels = torch.from_numpy(val_labels).long()
 
     return train_features, train_labels, val_features, val_labels
+
+
+def load_test_features(features_dir):
+    """Load test features and labels"""
+    test_features = np.load(os.path.join(features_dir, 'test_features.npy'))
+    test_labels = np.load(os.path.join(features_dir, 'test_labels.npy'))
+    return test_features, test_labels
 
 
 class LinearProbe(nn.Module):
@@ -325,6 +340,59 @@ def save_model_and_results(model, history, training_time, best_val_acc, output_d
     metrics_path = os.path.join(results_dir, 'metrics_summary')
     save_metrics_summary(metrics, metrics_path)
     print(f"   ✅ Metrics summary saved")
+
+    # Evaluate on test set with domain breakdown
+    print(f"\n{'='*70}")
+    print("📊 TEST SET EVALUATION (Domain Breakdown)")
+    print(f"{'='*70}")
+
+    try:
+        # Load test features
+        X_test, y_test = load_test_features(args.features_dir)
+
+        # Load domain categories
+        with_pairs, without_pairs = load_class_categories(
+            'Dataset/list/class_with_pairs.txt',
+            'Dataset/list/class_without_pairs.txt'
+        )
+
+        # Load groundtruth
+        groundtruth = load_groundtruth('Dataset/list/groundtruth.txt')
+
+        # Get test image names (sorted to match feature order)
+        image_names = sorted(list(groundtruth.keys()))
+
+        # Predict on test set
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        model = model.to(device)
+        model.eval()
+
+        X_test_tensor = torch.from_numpy(X_test).float().to(device)
+        with torch.no_grad():
+            outputs = model(X_test_tensor)
+            probs = torch.softmax(outputs, dim=1)
+
+        y_pred_proba_test = probs.cpu().numpy()
+
+        # Categorize test samples
+        categories = categorize_test_samples(image_names, groundtruth, with_pairs, without_pairs)
+
+        # Compute metrics for each category
+        results = {}
+        for category_name, indices in categories.items():
+            results[category_name] = compute_category_metrics(y_pred_proba_test, y_test, indices)
+
+        # Display results
+        display_detailed_breakdown("Test Set", results)
+
+        # Save detailed results
+        save_detailed_results(results, output_dir, "test_domain_metrics.json")
+        print(f"   ✅ Domain-specific metrics saved to: {output_dir}/test_domain_metrics.json")
+
+    except Exception as e:
+        import traceback
+        print(f"   ⚠️  Warning: Could not compute domain-specific metrics: {e}")
+        print(f"   Full error: {traceback.format_exc()}")
 
 
 def main():

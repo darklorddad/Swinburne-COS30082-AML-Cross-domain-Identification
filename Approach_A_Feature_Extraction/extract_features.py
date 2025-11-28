@@ -51,11 +51,11 @@ def parse_args():
                         help='Ground truth file for test set')
     parser.add_argument('--output_dir', type=str, default='Approach_A_Feature_Extraction/features',
                         help='Output directory for features')
-    parser.add_argument('--batch_size', type=int, default=32,
-                        help='Batch size for feature extraction')
+    parser.add_argument('--batch_size', type=int, default=64,
+                        help='Batch size for feature extraction (increased for GPU utilization)')
     parser.add_argument('--image_size', type=int, default=518,
                         help='Input image size (DINOv2 uses 518x518)')
-    parser.add_argument('--plant_model_path', type=str, default='Models/pretrained/model_best.pth.tar',
+    parser.add_argument('--plant_model_path', type=str, default='dinov2_patch14_reg4_onlyclassifier_th/model_best.pth.tar',
                         help='Path to plant-pretrained model checkpoint')
     return parser.parse_args()
 
@@ -119,7 +119,7 @@ def load_model(model_type, plant_model_path=None, device='cuda'):
     if model_type == 'plant_pretrained_base':
         if plant_model_path and os.path.exists(plant_model_path):
             print(f"Loading plant-pretrained weights from {plant_model_path}")
-            checkpoint = torch.load(plant_model_path, map_location='cpu')
+            checkpoint = torch.load(plant_model_path, map_location='cpu', weights_only=False)
 
             # Handle different checkpoint formats
             if 'state_dict' in checkpoint:
@@ -137,9 +137,9 @@ def load_model(model_type, plant_model_path=None, device='cuda'):
 
             # Load weights (strict=False to ignore missing head weights)
             model.load_state_dict(state_dict, strict=False)
-            print("✅ Plant-pretrained weights loaded successfully")
+            print("Plant-pretrained weights loaded successfully")
         else:
-            print(f"⚠️  Warning: Plant model path not found: {plant_model_path}")
+            print(f"WARNING: Plant model path not found: {plant_model_path}")
             print("Using ImageNet-pretrained DINOv2 base as fallback")
             model = timm.create_model(
                 config['model_name'],
@@ -150,7 +150,7 @@ def load_model(model_type, plant_model_path=None, device='cuda'):
     model = model.to(device)
     model.eval()
 
-    print(f"✅ Model loaded: {config['model_name']}")
+    print(f"Model loaded: {config['model_name']}")
     print(f"   Feature dimension: {config['feature_dim']}")
 
     return model, config['feature_dim']
@@ -200,6 +200,10 @@ def extract_features(model, dataloader, device, desc="Extracting"):
 def main():
     args = parse_args()
 
+    # Set UTF-8 encoding for Windows console
+    if sys.platform == 'win32':
+        sys.stdout.reconfigure(encoding='utf-8')
+
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -208,7 +212,7 @@ def main():
     print(f"Using device: {device}")
 
     print("=" * 70)
-    print(f"🔍 FEATURE EXTRACTION: {args.model_type}")
+    print(f"FEATURE EXTRACTION: {args.model_type}")
     print("=" * 70)
 
     # Load model
@@ -231,13 +235,13 @@ def main():
 
     # Extract features from training set
     if os.path.exists(args.train_dir):
-        print(f"\n📁 Processing training set: {args.train_dir}")
+        print(f"\nProcessing training set: {args.train_dir}")
         train_dataset = PlantDataset(args.train_dir, transform=transform)
         train_loader = DataLoader(
             train_dataset,
             batch_size=args.batch_size,
             shuffle=False,
-            num_workers=4,
+            num_workers=2,  # Reduced to prevent resource exhaustion when running multiple models
             pin_memory=True
         )
 
@@ -252,19 +256,19 @@ def main():
         np.save(train_labels_output, train_labels)
 
         stats['train_samples'] = len(train_features)
-        print(f"   ✅ Saved: {train_output}")
-        print(f"   📊 Shape: {train_features.shape}")
-        print(f"   🏷️  Labels: {train_labels.shape}")
+        print(f"   Saved: {train_output}")
+        print(f"   Shape: {train_features.shape}")
+        print(f"   Labels: {train_labels.shape}")
 
     # Extract features from validation set
     if os.path.exists(args.val_dir):
-        print(f"\n📁 Processing validation set: {args.val_dir}")
+        print(f"\nProcessing validation set: {args.val_dir}")
         val_dataset = PlantDataset(args.val_dir, transform=transform)
         val_loader = DataLoader(
             val_dataset,
             batch_size=args.batch_size,
             shuffle=False,
-            num_workers=4,
+            num_workers=2,  # Reduced to prevent resource exhaustion when running multiple models
             pin_memory=True
         )
 
@@ -279,13 +283,13 @@ def main():
         np.save(val_labels_output, val_labels)
 
         stats['val_samples'] = len(val_features)
-        print(f"   ✅ Saved: {val_output}")
-        print(f"   📊 Shape: {val_features.shape}")
-        print(f"   🏷️  Labels: {val_labels.shape}")
+        print(f"   Saved: {val_output}")
+        print(f"   Shape: {val_features.shape}")
+        print(f"   Labels: {val_labels.shape}")
 
     # Extract features from test set
     if os.path.exists(args.test_dir):
-        print(f"\n📁 Processing test set: {args.test_dir}")
+        print(f"\nProcessing test set: {args.test_dir}")
         test_dataset = PlantTestDataset(
             args.test_dir,
             transform=transform,
@@ -295,7 +299,7 @@ def main():
             test_dataset,
             batch_size=args.batch_size,
             shuffle=False,
-            num_workers=4,
+            num_workers=2,  # Reduced to prevent resource exhaustion when running multiple models
             pin_memory=True
         )
 
@@ -334,9 +338,9 @@ def main():
             f.write('\n'.join(paths_list))
 
         stats['test_samples'] = len(test_features)
-        print(f"   ✅ Saved: {test_output}")
-        print(f"   📊 Shape: {test_features.shape}")
-        print(f"   🏷️  Labels: {test_labels.shape}")
+        print(f"   Saved: {test_output}")
+        print(f"   Shape: {test_features.shape}")
+        print(f"   Labels: {test_labels.shape}")
 
     # Save metadata
     metadata_file = os.path.join(model_output_dir, 'metadata.json')
@@ -344,16 +348,16 @@ def main():
         json.dump(stats, f, indent=4)
 
     print("\n" + "=" * 70)
-    print("✨ FEATURE EXTRACTION COMPLETE!")
+    print("FEATURE EXTRACTION COMPLETE!")
     print("=" * 70)
-    print(f"📁 Output directory: {model_output_dir}")
-    print(f"📊 Feature dimension: {feature_dim}")
+    print(f"Output directory: {model_output_dir}")
+    print(f"Feature dimension: {feature_dim}")
     if 'train_samples' in stats:
-        print(f"   🏋️  Training samples: {stats['train_samples']}")
+        print(f"   Training samples: {stats['train_samples']}")
     if 'val_samples' in stats:
-        print(f"   ✅ Validation samples: {stats['val_samples']}")
+        print(f"   Validation samples: {stats['val_samples']}")
     if 'test_samples' in stats:
-        print(f"   🧪 Test samples: {stats['test_samples']}")
+        print(f"   Test samples: {stats['test_samples']}")
     print("=" * 70)
 
 

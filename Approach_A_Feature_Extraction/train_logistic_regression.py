@@ -22,6 +22,17 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import classification_report, accuracy_score
 import time
 
+# Add parent directory to path for importing evaluation utilities
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from Src.utils.detailed_evaluation import (
+    load_class_categories,
+    load_groundtruth,
+    categorize_test_samples,
+    compute_category_metrics,
+    display_detailed_breakdown,
+    save_detailed_results
+)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train Logistic Regression on DINOv2 features')
@@ -67,6 +78,13 @@ def load_features(features_dir):
     print(f"   ✅ Validation labels: {val_labels.shape}")
 
     return train_features, train_labels, val_features, val_labels
+
+
+def load_test_features(features_dir):
+    """Load test features and labels"""
+    test_features = np.load(os.path.join(features_dir, 'test_features.npy'))
+    test_labels = np.load(os.path.join(features_dir, 'test_labels.npy'))
+    return test_features, test_labels
 
 
 def train_logistic_regression(X_train, y_train, n_jobs=-1, cv_folds=3):
@@ -279,13 +297,60 @@ def save_model_and_results(grid_search, output_dir, training_time, val_accuracy,
     np.save(proba_path, y_pred_proba)
     print(f"   ✅ Prediction probabilities saved: {proba_path}")
 
+    # Evaluate on test set with domain breakdown
+    print(f"\n{'='*70}")
+    print("📊 TEST SET EVALUATION (Domain Breakdown)")
+    print(f"{'='*70}")
+
+    try:
+        # Load test features
+        X_test, y_test = load_test_features(features_dir)
+
+        # Load domain categories
+        with_pairs, without_pairs = load_class_categories(
+            'Dataset/list/class_with_pairs.txt',
+            'Dataset/list/class_without_pairs.txt'
+        )
+
+        # Load groundtruth
+        groundtruth = load_groundtruth('Dataset/list/groundtruth.txt')
+
+        # Get test image names (sorted to match feature order)
+        image_names = sorted(list(groundtruth.keys()))
+
+        # Predict on test set
+        y_pred_test = grid_search.best_estimator_.predict(X_test)
+        y_pred_proba_test = grid_search.best_estimator_.predict_proba(X_test)
+
+        # Categorize test samples
+        categories = categorize_test_samples(image_names, groundtruth, with_pairs, without_pairs)
+
+        # Compute metrics for each category
+        results = {}
+        for category_name, indices in categories.items():
+            results[category_name] = compute_category_metrics(y_pred_proba_test, y_test, indices)
+
+        # Display results
+        display_detailed_breakdown("Test Set", results)
+
+        # Save detailed results
+        save_detailed_results(results, output_dir, "test_domain_metrics.json")
+        print(f"   ✅ Domain-specific metrics saved to: {output_dir}/test_domain_metrics.json")
+
+    except Exception as e:
+        import traceback
+        print(f"   ⚠️  Warning: Could not compute domain-specific metrics: {e}")
+        print(f"   Full error: {traceback.format_exc()}")
+
     # Generate visualizations
     print(f"\n📊 Generating visualizations...")
     try:
-        from visualize_classifier import generate_all_visualizations
+        from Approach_A_Feature_Extraction.visualize_classifier import generate_all_visualizations
         generate_all_visualizations(output_dir, features_dir, classifier_type='logistic_regression')
     except Exception as e:
+        import traceback
         print(f"   ⚠️  Warning: Could not generate visualizations: {e}")
+        print(f"   Full error: {traceback.format_exc()}")
 
 
 def main():

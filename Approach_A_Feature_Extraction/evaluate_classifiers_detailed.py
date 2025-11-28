@@ -213,11 +213,16 @@ def find_models(results_dir):
         config_file = os.path.join(model_path_full, 'training_config.json')
 
         if os.path.exists(sklearn_model):
-            # Extract info from directory name (e.g., "svm_imagenet_base")
+            # Extract info from directory name (e.g., "svm_imagenet_base", "logistic_regression_imagenet_small")
             parts = model_dir.split('_')
             if len(parts) >= 2:
-                classifier_type = parts[0]  # svm, logistic
-                feature_type = '_'.join(parts[1:])  # imagenet_base, plant_pretrained_base, etc.
+                # Handle logistic_regression vs svm differently
+                if parts[0] == 'logistic' and len(parts) >= 3 and parts[1] == 'regression':
+                    classifier_type = 'logistic_regression'
+                    feature_type = '_'.join(parts[2:])  # imagenet_base, plant_pretrained_base, etc.
+                else:
+                    classifier_type = parts[0]  # svm, etc.
+                    feature_type = '_'.join(parts[1:])  # imagenet_base, plant_pretrained_base, etc.
 
                 models.append({
                     'name': model_dir,
