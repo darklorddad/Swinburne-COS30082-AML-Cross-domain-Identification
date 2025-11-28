@@ -421,7 +421,8 @@ class TrainingOrchestrator:
 
     def train_approach_a_full(self, extractors: Optional[List[str]] = None,
                              classifiers: Optional[List[str]] = None,
-                             n_jobs: int = -1) -> Dict:
+                             n_jobs: int = -1,
+                             force: bool = False) -> Dict:
         """
         Train multiple Approach A models
 
@@ -429,6 +430,7 @@ class TrainingOrchestrator:
             extractors: List of extractors to use (None = all)
             classifiers: List of classifiers to train (None = all)
             n_jobs: Number of parallel jobs for SVM/Random Forest (-1 = all CPUs)
+            force: Retrain even if model already completed
 
         Returns:
             Dictionary with success/failure counts
@@ -459,7 +461,7 @@ class TrainingOrchestrator:
         print("-" * 60)
         for extractor in extractors:
             for classifier in classifiers:
-                success = self.train_classifier(extractor, classifier, n_jobs=n_jobs)
+                success = self.train_classifier(extractor, classifier, n_jobs=n_jobs, force=force)
                 if success:
                     results['successful'] += 1
                 else:
@@ -473,13 +475,14 @@ class TrainingOrchestrator:
         return results
 
     def train_approach_b_full(self, models: Optional[List[str]] = None,
-                             epochs: int = 60) -> Dict:
+                             epochs: int = 60, force: bool = False) -> Dict:
         """
         Fine-tune multiple Approach B models
 
         Args:
             models: List of models to fine-tune (None = all)
             epochs: Training epochs per model
+            force: Retrain even if already completed
 
         Returns:
             Dictionary with success/failure counts
@@ -498,7 +501,7 @@ class TrainingOrchestrator:
 
         for i, model in enumerate(models, 1):
             print(f"\n[{i}/{len(models)}] Fine-tuning {model}...")
-            success = self.finetune_model(model, epochs)
+            success = self.finetune_model(model, epochs, force=force)
             if success:
                 results['successful'] += 1
             else:

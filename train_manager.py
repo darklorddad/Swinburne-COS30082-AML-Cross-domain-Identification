@@ -16,6 +16,7 @@ Date: 2025-11-06
 import os
 import sys
 import json
+import numpy as np
 from pathlib import Path
 from typing import List, Optional
 from training_orchestrator import TrainingOrchestrator
@@ -56,7 +57,7 @@ class TrainingManager:
         # Approach A Models
         a_models = summary['approach_a']['models']
         print(f"Approach A - Classifiers:  ", end="")
-        print(f"✅ {a_models['completed']}/16  ", end="")
+        print(f"✅ {a_models['completed']}/12  ", end="")
         print(f"🔄 {a_models['in_progress']}  ", end="")
         print(f"❌ {a_models['failed']}  ", end="")
         print(f"⏳ {a_models['pending']}")
@@ -78,17 +79,22 @@ class TrainingManager:
         self.print_status_bar()
 
         print("MAIN MENU:")
-        print("  1. Approach A - Feature Extraction & Classifiers")
-        print("  2. Approach B - Fine-Tuning")
+        print()
+        print("EXPERIMENT A: MIXED DATASET (Herb + Field)")
+        print(f"  1. Approach A - Feature Extraction & Classifiers (Train + Validate [Both mixed with Herbarium and Photo Imgaes (207 field images)])")
+        print(f"  2. Approach B - Fine-Tuning (Train + Validate [Both mixed with Herbarium and Photo Imgaes (207 field images)])")
         print("  3. Run Full Pipeline (All 16 Models)")
         print("  4. View Detailed Status")
         print("  5. Generate Comparison Report")
         print("  6. Generate Visualizations")
         print("  7. Reset Model Status")
+        print()
+        print("EXPERIMENT B: CROSS-DOMAIN GENERALIZATION (Herbarium → Field)")
+        print("  8. Cross-Domain Workflow (CROSS-DOMAIN GENERALIZATION (Herbarium → Field))")
         print("  0. Exit")
         print()
 
-        choice = input("Select option (0-7): ").strip()
+        choice = input("Select option (0-8): ").strip()
 
         if choice == '1':
             self.approach_a_menu()
@@ -104,6 +110,8 @@ class TrainingManager:
             self.visualization_menu()
         elif choice == '7':
             self.reset_status_menu()
+        elif choice == '8':
+            self.crossdomain_menu()
         elif choice == '0':
             self.running = False
             print("\n👋 Goodbye!\n")
@@ -262,11 +270,26 @@ class TrainingManager:
             if classifier_choice == '4':
                 # Train all three
                 print(f"\n🔄 Training all classifiers for {extractor}...")
+
+                # Check if any models are already completed
+                completed_models = []
                 for classifier in classifiers:
                     model_id = f"{extractor}_{classifier}"
                     status = self.orchestrator.state['approach_a']['models'][model_id]['status']
                     if status == 'completed':
-                        print(f"⏭️  Skipping {classifier} (already completed)")
+                        completed_models.append(classifier)
+
+                # Ask about retraining if any are completed
+                if completed_models:
+                    print(f"\n⚠️  Found {len(completed_models)} already trained model(s): {', '.join(completed_models)}")
+                    retrain_all = input("Retrain already completed models? (y/N): ").strip().lower()
+                    force = (retrain_all == 'y')
+
+                for classifier in classifiers:
+                    model_id = f"{extractor}_{classifier}"
+                    status = self.orchestrator.state['approach_a']['models'][model_id]['status']
+                    if status == 'completed' and not force:
+                        print(f"\n⏭️  Skipping {classifier} (already completed)")
                         continue
                     print(f"\n{'='*60}")
                     print(f"Training {classifier}...")
@@ -479,6 +502,28 @@ class TrainingManager:
             print(f"  Classifiers: {', '.join(selected_classifiers)}")
             print()
 
+            # Check if any models are already completed
+            completed_models = []
+            for extractor in selected_extractors:
+                for classifier in selected_classifiers:
+                    model_id = f"{extractor}_{classifier}"
+                    status = self.orchestrator.state['approach_a']['models'][model_id]['status']
+                    if status == 'completed':
+                        completed_models.append(model_id)
+
+            # Ask about retraining if any are completed
+            force = False
+            if completed_models:
+                print(f"\n⚠️  Found {len(completed_models)} already trained model(s):")
+                # Show first 3 models if many, otherwise show all
+                if len(completed_models) <= 3:
+                    print(f"    {', '.join(completed_models)}")
+                else:
+                    print(f"    {', '.join(completed_models[:3])}, ... and {len(completed_models)-3} more")
+                retrain_all = input("Retrain already completed models? (y/N): ").strip().lower()
+                force = (retrain_all == 'y')
+                print()
+
             confirm = input("Continue? (y/N): ").strip().lower()
 
             if confirm == 'y':
@@ -490,7 +535,8 @@ class TrainingManager:
                 results = self.orchestrator.train_approach_a_full(
                     extractors=selected_extractors,
                     classifiers=selected_classifiers,
-                    n_jobs=n_jobs
+                    n_jobs=n_jobs,
+                    force=force
                 )
 
                 print(f"\n{'='*70}")
@@ -637,6 +683,20 @@ class TrainingManager:
             print(f"\nEstimated time: {len(selected_models) * 2}-{len(selected_models) * 6} hours")
             print()
 
+            # Check if any selected models are already completed
+            completed_models = []
+            for model in selected_models:
+                status = self.orchestrator.state['approach_b']['models'][model]['status']
+                if status == 'completed':
+                    completed_models.append(model)
+
+            # Ask about retraining if any are completed
+            force = False
+            if completed_models:
+                print(f"\n⚠️  Found {len(completed_models)} already trained model(s): {', '.join(completed_models)}")
+                retrain = input("Retrain already completed models? (y/N): ").strip().lower()
+                force = (retrain == 'y')
+
             epochs_input = input("Number of epochs per model (default=60): ").strip()
             epochs = int(epochs_input) if epochs_input else 60
 
@@ -646,7 +706,8 @@ class TrainingManager:
                 print("\n🚀 Starting fine-tuning pipeline...\n")
                 results = self.orchestrator.train_approach_b_full(
                     models=selected_models,
-                    epochs=epochs
+                    epochs=epochs,
+                    force=force
                 )
 
                 print(f"\n{'='*70}")
@@ -668,14 +729,24 @@ class TrainingManager:
         self.print_header("RUN ALL APPROACH B MODELS")
 
         print("This will fine-tune all 4 DINOv2 models:")
-        print("  • plant_pretrained_base")
-        print("  • imagenet_small")
-        print("  • imagenet_base")
-        print("  • imagenet_large")
+        models = self.orchestrator.FINETUNE_MODELS
+        for model in models:
+            status = self.orchestrator.state['approach_b']['models'][model]['status']
+            icon = '✅' if status == 'completed' else '⏳'
+            print(f"  {icon} {model}")
         print()
         print("Estimated time: 8-24 hours")
-        print("Models already completed will be skipped.")
         print()
+
+        # Check if any models are already completed
+        completed_models = [m for m in models if self.orchestrator.state['approach_b']['models'][m]['status'] == 'completed']
+
+        force = False
+        if completed_models:
+            print(f"⚠️  Found {len(completed_models)} already trained model(s): {', '.join(completed_models)}")
+            retrain = input("Retrain already completed models? (y/N): ").strip().lower()
+            force = (retrain == 'y')
+            print()
 
         epochs_input = input("Number of epochs per model (default=60): ").strip()
         epochs = int(epochs_input) if epochs_input else 60
@@ -684,7 +755,7 @@ class TrainingManager:
 
         if confirm == 'y':
             print("\n🚀 Starting Approach B full pipeline...\n")
-            results = self.orchestrator.train_approach_b_full(epochs=epochs)
+            results = self.orchestrator.train_approach_b_full(epochs=epochs, force=force)
 
             print(f"\n{'='*70}")
             print(f"RESULTS:")
@@ -1340,6 +1411,652 @@ class TrainingManager:
             print("\n❌ Invalid input")
             input("Press Enter to continue...")
 
+    def crossdomain_menu(self):
+        """Cross-Domain Workflow Menu"""
+        import subprocess
+
+        self.clear_screen()
+        self.print_header("CROSS-DOMAIN WORKFLOW")
+
+        print("Cross-Domain Validation Split for Testing Herbarium→Field Generalization")
+        print()
+        print("OPTIONS:")
+        print("  1. Create Cross-Domain Validation Split")
+        print("  2. Extract Features (Cross-Domain)")
+        print("  3. Train Classifiers (Cross-Domain)")
+        print("  4. Evaluate & Compare (Old vs New)")
+        print("  5. View Cross-Domain Statistics")
+        print("  6. Evaluate Validation Set (Detailed)")
+        print("  7. Evaluate Test Set (Detailed)")
+        print("  0. Back to Main Menu")
+        print()
+
+        choice = input("Select option (0-7): ").strip()
+
+        if choice == '1':
+            # Create cross-domain validation split
+            print("\n🔄 Creating Cross-Domain Validation Split...")
+            print("This will create:")
+            print("  - Dataset/balanced_train_crossdomain/")
+            print("  - Dataset/validation_crossdomain/")
+            print()
+            confirm = input("Proceed? (y/N): ").strip().lower()
+
+            if confirm == 'y':
+                result = subprocess.run(['python', 'Src/data_balancing_crossdomain.py'],
+                                      capture_output=False, text=True)
+                if result.returncode == 0:
+                    print("\n✅ Cross-domain split created successfully!")
+                else:
+                    print("\n❌ Error creating cross-domain split")
+                input("\nPress Enter to continue...")
+            else:
+                print("\n❌ Cancelled")
+                input("Press Enter to continue...")
+            self.crossdomain_menu()
+
+        elif choice == '2':
+            # Extract features with cross-domain split
+            print("\n🔍 Extract Features (Cross-Domain Validation)")
+            print()
+            print("Select Model:")
+            models = ['plant_pretrained_base', 'imagenet_small', 'imagenet_base', 'imagenet_large']
+            for i, model in enumerate(models, 1):
+                print(f"  {i}. {model}")
+            print("  5. All Models")
+            print("  0. Back")
+            print()
+
+            model_choice = input("Select (0-5): ").strip()
+
+            if model_choice == '0':
+                self.crossdomain_menu()
+                return
+            elif model_choice == '5':
+                selected_models = models
+            elif model_choice in ['1', '2', '3', '4']:
+                selected_models = [models[int(model_choice) - 1]]
+            else:
+                print("\n❌ Invalid choice")
+                input("Press Enter to continue...")
+                self.crossdomain_menu()
+                return
+
+            print(f"\n🔄 Extracting features for: {', '.join(selected_models)}")
+            print("This will save to: Approach_A_Feature_Extraction/features_crossdomain/")
+            print()
+
+            for model in selected_models:
+                print(f"\n📊 Extracting {model}...")
+                batch_size = 48 if model == 'imagenet_large' else 64
+                result = subprocess.run([
+                    'python', 'Approach_A_Feature_Extraction/extract_features.py',
+                    '--model_type', model,
+                    '--train_dir', 'Dataset/balanced_train_crossdomain',
+                    '--val_dir', 'Dataset/validation_crossdomain',
+                    '--test_dir', 'Dataset/test',
+                    '--output_dir', 'Approach_A_Feature_Extraction/features_crossdomain',
+                    '--batch_size', str(batch_size)
+                ], capture_output=False, text=True)
+
+                if result.returncode == 0:
+                    print(f"✅ {model} features extracted!")
+                else:
+                    print(f"❌ {model} extraction failed")
+
+            input("\nPress Enter to continue...")
+            self.crossdomain_menu()
+
+        elif choice == '3':
+            # Train classifiers with cross-domain features
+            print("\n🏋️  Train Classifiers (Cross-Domain Features)")
+            print()
+            print("Select Feature Set:")
+            models = ['plant_pretrained_base', 'imagenet_small', 'imagenet_base', 'imagenet_large']
+            for i, model in enumerate(models, 1):
+                print(f"  {i}. {model}")
+            print("  0. Back")
+            print()
+
+            model_choice = input("Select (0-4): ").strip()
+
+            if model_choice == '0':
+                self.crossdomain_menu()
+                return
+            elif model_choice in ['1', '2', '3', '4']:
+                selected_model = models[int(model_choice) - 1]
+            else:
+                print("\n❌ Invalid choice")
+                input("Press Enter to continue...")
+                self.crossdomain_menu()
+                return
+
+            print(f"\nSelect Classifier:")
+            classifiers = ['linear_probe', 'svm', 'logistic_regression']
+            for i, clf in enumerate(classifiers, 1):
+                print(f"  {i}. {clf}")
+            print("  4. All Classifiers")
+            print("  0. Back")
+            print()
+
+            clf_choice = input("Select (0-4): ").strip()
+
+            if clf_choice == '0':
+                self.crossdomain_menu()
+                return
+            elif clf_choice == '4':
+                selected_classifiers = classifiers
+            elif clf_choice in ['1', '2', '3']:
+                selected_classifiers = [classifiers[int(clf_choice) - 1]]
+            else:
+                print("\n❌ Invalid choice")
+                input("Press Enter to continue...")
+                self.crossdomain_menu()
+                return
+
+            features_dir = f'Approach_A_Feature_Extraction/features_crossdomain/{selected_model}'
+
+            if not os.path.exists(features_dir):
+                print(f"\n❌ Features not found: {features_dir}")
+                print("Please extract features first (Option 2)")
+                input("\nPress Enter to continue...")
+                self.crossdomain_menu()
+                return
+
+            for clf in selected_classifiers:
+                print(f"\n🔄 Training {clf} on {selected_model}...")
+                output_dir = f'Approach_A_Feature_Extraction/results_crossdomain/{clf}_{selected_model}'
+
+                if clf == 'linear_probe':
+                    script = 'Approach_A_Feature_Extraction/train_linear_probe.py'
+                elif clf == 'svm':
+                    script = 'Approach_A_Feature_Extraction/train_svm.py'
+                elif clf == 'logistic_regression':
+                    script = 'Approach_A_Feature_Extraction/train_logistic_regression.py'
+
+                result = subprocess.run([
+                    'python', script,
+                    '--features_dir', features_dir,
+                    '--output_dir', output_dir
+                ], capture_output=False, text=True)
+
+                if result.returncode == 0:
+                    print(f"✅ {clf} trained successfully!")
+                else:
+                    print(f"❌ {clf} training failed")
+
+            input("\nPress Enter to continue...")
+            self.crossdomain_menu()
+
+        elif choice == '4':
+            # Evaluate and compare
+            print("\n📊 Evaluate & Compare (Old vs New Validation)")
+            print()
+
+            # Load old validation metrics (random 80/20 split)
+            old_results_dir = "Approach_A_Feature_Extraction/results"
+            new_results_dir = "Approach_A_Feature_Extraction/results_crossdomain"
+            test_eval_file = "Approach_A_Feature_Extraction/evaluation_results/detailed_results.json"
+
+            print("="*80)
+            print("VALIDATION METRICS COMPARISON")
+            print("="*80)
+
+            # Display old validation results
+            print("\n[1] OLD VALIDATION (Random 80/20 Split)")
+            print("-" * 80)
+            if os.path.exists(old_results_dir):
+                old_val_acc = {}
+                for model_dir in os.listdir(old_results_dir):
+                    metrics_file = os.path.join(old_results_dir, model_dir, "results/metrics_summary.json")
+                    if os.path.exists(metrics_file):
+                        with open(metrics_file, 'r') as f:
+                            metrics = json.load(f)
+                            old_val_acc[model_dir] = metrics.get('best_val_accuracy', 'N/A')
+
+                if old_val_acc:
+                    print(f"{'Model':<40} {'Val Accuracy':>15}")
+                    print("-" * 80)
+                    for model, acc in sorted(old_val_acc.items()):
+                        print(f"{model:<40} {acc:>14.2f}%" if isinstance(acc, (int, float)) else f"{model:<40} {acc:>15}")
+                    print("\nNote: High accuracy (99.7-99.9%) is misleading - same distribution in train/val")
+                else:
+                    print("No old validation results found")
+            else:
+                print(f"Directory not found: {old_results_dir}")
+
+            # Display new validation results (if available)
+            print("\n[2] NEW VALIDATION (Cross-Domain Split)")
+            print("-" * 80)
+            if os.path.exists(new_results_dir):
+                new_val_acc = {}
+                for model_dir in os.listdir(new_results_dir):
+                    metrics_file = os.path.join(new_results_dir, model_dir, "results/metrics_summary.json")
+                    if os.path.exists(metrics_file):
+                        with open(metrics_file, 'r') as f:
+                            metrics = json.load(f)
+                            new_val_acc[model_dir] = metrics.get('best_val_accuracy', 'N/A')
+
+                if new_val_acc:
+                    print(f"{'Model':<40} {'Val Accuracy':>15}")
+                    print("-" * 80)
+                    for model, acc in sorted(new_val_acc.items()):
+                        print(f"{model:<40} {acc:>14.2f}%" if isinstance(acc, (int, float)) else f"{model:<40} {acc:>15}")
+                    print("\nNote: Lower accuracy expected - tests herb→field generalization")
+                else:
+                    print("No cross-domain validation results found yet")
+                    print("Run Option 3 (Train Classifiers) first")
+            else:
+                print(f"Directory not found: {new_results_dir}")
+                print("Cross-domain classifiers not trained yet")
+
+            # Display test results (detailed breakdown)
+            print("\n[3] TEST SET RESULTS (Detailed Breakdown)")
+            print("-" * 80)
+            if os.path.exists(test_eval_file):
+                with open(test_eval_file, 'r') as f:
+                    test_results = json.load(f)
+
+                print(f"\n{'Model':<30} {'Category':<15} {'Top-1':>8} {'Top-5':>8} {'MRR':>8}")
+                print("=" * 80)
+
+                for model_name, categories in sorted(test_results.items()):
+                    for i, (cat_name, metrics) in enumerate([
+                        ('overall', categories.get('overall', {})),
+                        ('with_pairs', categories.get('with_pairs', {})),
+                        ('without_pairs', categories.get('without_pairs', {}))
+                    ]):
+                        model_col = model_name if i == 0 else ""
+                        top1 = metrics.get('top1', 0)
+                        top5 = metrics.get('top5', 0)
+                        mrr = metrics.get('mrr', 0)
+                        print(f"{model_col:<30} {cat_name:<15} {top1:>7.2f}% {top5:>7.2f}% {mrr:>8.3f}")
+                    print("-" * 80)
+
+                print("\nKey Insight:")
+                print("  - Without-pairs shows 14-22% accuracy (catastrophic!)")
+                print("  - Models fail on classes with only herbarium training data")
+                print("  - Cross-domain split helps identify this issue during validation")
+            else:
+                print(f"Test evaluation not found: {test_eval_file}")
+                print("Run: python Approach_A_Feature_Extraction/evaluate_classifiers_detailed.py")
+
+            print("\n" + "="*80)
+            input("\nPress Enter to continue...")
+            self.crossdomain_menu()
+
+        elif choice == '5':
+            # View statistics
+            print("\n📈 Cross-Domain Statistics")
+            print()
+
+            # Check if cross-domain datasets exist
+            train_cd = "Dataset/balanced_train_crossdomain"
+            val_cd = "Dataset/validation_crossdomain"
+
+            if os.path.exists(train_cd) and os.path.exists(val_cd):
+                print("✅ Cross-Domain Datasets:")
+                print(f"   Training: {train_cd}")
+                print(f"   Validation: {val_cd}")
+                print()
+
+                # Load metadata if available
+                try:
+                    with open(f"{train_cd}/metadata.json", 'r') as f:
+                        train_meta = json.load(f)
+                    with open(f"{val_cd}/metadata.json", 'r') as f:
+                        val_meta = json.load(f)
+
+                    print("Training Set:")
+                    print(f"   Total: {train_meta['total_images']} images")
+                    print(f"   Herbarium: {train_meta['herbarium_images']}")
+                    print(f"   Field: {train_meta['field_images']}")
+                    print()
+                    print("Validation Set:")
+                    print(f"   Total: {val_meta['total_images']} images")
+                    print(f"   Herbarium: {val_meta['herbarium_images']}")
+                    print(f"   Field: {val_meta['field_images']}")
+                    print()
+                    print("Key Insight:")
+                    field_pct = val_meta['field_images'] / val_meta['total_images'] * 100
+                    print(f"   {field_pct:.1f}% field images in validation")
+                    print(f"   Tests herb→field generalization!")
+                except:
+                    print("   (Metadata not available)")
+            else:
+                print("❌ Cross-Domain datasets not found")
+                print("   Run Option 1 to create them")
+
+            print()
+            input("Press Enter to continue...")
+            self.crossdomain_menu()
+
+        elif choice == '6':
+            # Evaluate validation set with detailed breakdown
+            print("\n📊 Evaluate Validation Set (Detailed Breakdown)")
+            print()
+
+            results_dir = "Approach_A_Feature_Extraction/results_crossdomain"
+
+            if not os.path.exists(results_dir):
+                print(f"❌ Cross-domain results directory not found: {results_dir}")
+                print("   Train classifiers first (Option 3)")
+                input("\nPress Enter to continue...")
+                self.crossdomain_menu()
+                return
+
+            # List available trained models
+            available_models = []
+            for model_dir in os.listdir(results_dir):
+                model_path = os.path.join(results_dir, model_dir, "best_model.pth")
+                joblib_path = os.path.join(results_dir, model_dir, "best_model.joblib")
+                if os.path.exists(model_path) or os.path.exists(joblib_path):
+                    available_models.append(model_dir)
+
+            if not available_models:
+                print("❌ No trained models found")
+                print("   Train classifiers first (Option 3)")
+                input("\nPress Enter to continue...")
+                self.crossdomain_menu()
+                return
+
+            print("Available models:")
+            for i, model in enumerate(sorted(available_models), 1):
+                print(f"  {i}. {model}")
+            print(f"  {len(available_models) + 1}. All Models")
+            print("  0. Back")
+            print()
+
+            model_choice = input(f"Select (0-{len(available_models) + 1}): ").strip()
+
+            if model_choice == '0':
+                self.crossdomain_menu()
+                return
+            elif model_choice == str(len(available_models) + 1):
+                selected_models = sorted(available_models)
+            elif model_choice.isdigit() and 1 <= int(model_choice) <= len(available_models):
+                selected_models = [sorted(available_models)[int(model_choice) - 1]]
+            else:
+                print("\n❌ Invalid choice")
+                input("Press Enter to continue...")
+                self.crossdomain_menu()
+                return
+
+            print(f"\n🔍 Evaluating: {', '.join(selected_models)}")
+            print("="*80)
+
+            # Run evaluation for each model
+            for model_name in selected_models:
+                print(f"\n[{model_name}]")
+                print("-" * 80)
+
+                # Load validation predictions
+                val_pred_file = os.path.join(results_dir, model_name, "val_predictions_proba.npy")
+
+                # Extract feature model name (e.g., "linear_probe_imagenet_small" -> "imagenet_small")
+                if "plant_pretrained_base" in model_name:
+                    feature_model = "plant_pretrained_base"
+                elif "imagenet_small" in model_name:
+                    feature_model = "imagenet_small"
+                elif "imagenet_base" in model_name:
+                    feature_model = "imagenet_base"
+                elif "imagenet_large" in model_name:
+                    feature_model = "imagenet_large"
+                else:
+                    feature_model = model_name.split('_')[-1]  # Fallback
+
+                val_labels_file = f"Approach_A_Feature_Extraction/features_crossdomain/{feature_model}/val_labels.npy"
+                val_features_file = f"Approach_A_Feature_Extraction/features_crossdomain/{feature_model}/val_features.npy"
+
+                # Check if this is a linear probe model (PyTorch)
+                pytorch_model_file = os.path.join(results_dir, model_name, "best_model.pth")
+                config_file = os.path.join(results_dir, model_name, "training_config.json")
+                is_linear_probe = os.path.exists(pytorch_model_file) and os.path.exists(config_file)
+
+                if not os.path.exists(val_labels_file):
+                    print(f"  ❌ Labels not found: {val_labels_file}")
+                    continue
+
+                try:
+                    val_labels = np.load(val_labels_file)
+
+                    # For linear probe: load model and run inference
+                    if is_linear_probe:
+                        if not os.path.exists(val_features_file):
+                            print(f"  ❌ Features not found: {val_features_file}")
+                            continue
+
+                        import torch
+                        import torch.nn as nn
+
+                        # Define LinearProbe class
+                        class LinearProbe(nn.Module):
+                            def __init__(self, input_dim, num_classes):
+                                super(LinearProbe, self).__init__()
+                                self.fc = nn.Linear(input_dim, num_classes)
+
+                            def forward(self, x):
+                                return self.fc(x)
+
+                        # Load features and model
+                        val_features = np.load(val_features_file)
+
+                        with open(config_file, 'r') as f:
+                            config = json.load(f)
+
+                        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+                        model = LinearProbe(config['input_dim'], config['num_classes'])
+                        model.load_state_dict(torch.load(pytorch_model_file, map_location=device, weights_only=True))
+                        model = model.to(device)
+                        model.eval()
+
+                        # Run inference
+                        X_tensor = torch.from_numpy(val_features).float().to(device)
+                        with torch.no_grad():
+                            outputs = model(X_tensor)
+                            probs = torch.softmax(outputs, dim=1)
+
+                        val_pred_proba = probs.cpu().numpy()
+
+                    # For sklearn models: load saved predictions
+                    else:
+                        if not os.path.exists(val_pred_file):
+                            print(f"  ⚠️  Predictions not saved during training: {val_pred_file}")
+                            continue
+
+                        val_pred_proba = np.load(val_pred_file)
+
+                    # Load class categories
+                    with_pairs_file = "Dataset/list/class_with_pairs.txt"
+                    without_pairs_file = "Dataset/list/class_without_pairs.txt"
+
+                    # Get class ID to index mapping (PlantCLEF IDs -> 0-99)
+                    train_dir = "Dataset/balanced_train_crossdomain"
+                    class_dirs = sorted([d for d in os.listdir(train_dir) if os.path.isdir(os.path.join(train_dir, d))])
+                    plantclef_id_to_idx = {int(class_id): idx for idx, class_id in enumerate(class_dirs)}
+
+                    with_pairs_plantclef = []
+                    without_pairs_plantclef = []
+
+                    if os.path.exists(with_pairs_file):
+                        with open(with_pairs_file, 'r') as f:
+                            with_pairs_plantclef = [int(line.strip()) for line in f if line.strip()]
+
+                    if os.path.exists(without_pairs_file):
+                        with open(without_pairs_file, 'r') as f:
+                            without_pairs_plantclef = [int(line.strip()) for line in f if line.strip()]
+
+                    # Map PlantCLEF IDs to 0-99 indices
+                    with_pairs = [plantclef_id_to_idx[pid] for pid in with_pairs_plantclef if pid in plantclef_id_to_idx]
+                    without_pairs = [plantclef_id_to_idx[pid] for pid in without_pairs_plantclef if pid in plantclef_id_to_idx]
+
+                    # Compute metrics for each category
+                    def compute_metrics(predictions, labels, indices=None):
+                        if indices is not None and len(indices) > 0:
+                            pred_subset = predictions[indices]
+                            label_subset = labels[indices]
+                        else:
+                            pred_subset = predictions
+                            label_subset = labels
+
+                        if len(pred_subset) == 0:
+                            return {"N": 0, "top1": 0, "top5": 0, "mrr": 0}
+
+                        # Top-1
+                        top1_pred = np.argmax(pred_subset, axis=1)
+                        top1_acc = np.mean(top1_pred == label_subset) * 100
+
+                        # Top-5
+                        top5_pred = np.argsort(pred_subset, axis=1)[:, -5:]
+                        top5_acc = np.mean([label_subset[i] in top5_pred[i] for i in range(len(label_subset))]) * 100
+
+                        # MRR
+                        mrr_scores = []
+                        for i in range(len(pred_subset)):
+                            sorted_indices = np.argsort(pred_subset[i])[::-1]
+                            true_label = label_subset[i]
+                            if true_label in sorted_indices:
+                                rank_position = np.where(sorted_indices == true_label)[0][0] + 1
+                                mrr_scores.append(1.0 / rank_position)
+                            else:
+                                mrr_scores.append(0.0)
+                        mrr = np.mean(mrr_scores)
+
+                        return {
+                            "N": len(label_subset),
+                            "top1": top1_acc,
+                            "top5": top5_acc,
+                            "mrr": mrr
+                        }
+
+                    # Categorize samples
+                    with_pairs_indices = [i for i, label in enumerate(val_labels) if label in with_pairs]
+                    without_pairs_indices = [i for i, label in enumerate(val_labels) if label in without_pairs]
+
+                    # Compute metrics
+                    overall = compute_metrics(val_pred_proba, val_labels)
+                    with_pairs_metrics = compute_metrics(val_pred_proba, val_labels, with_pairs_indices)
+                    without_pairs_metrics = compute_metrics(val_pred_proba, val_labels, without_pairs_indices)
+
+                    # Display results
+                    print(f"  {'Category':<15} {'N':>6} {'Top-1':>8} {'Top-5':>8} {'MRR':>8}")
+                    print("  " + "-" * 55)
+                    print(f"  {'Overall':<15} {overall['N']:>6} {overall['top1']:>7.2f}% {overall['top5']:>7.2f}% {overall['mrr']:>8.3f}")
+                    print(f"  {'With-Pairs':<15} {with_pairs_metrics['N']:>6} {with_pairs_metrics['top1']:>7.2f}% {with_pairs_metrics['top5']:>7.2f}% {with_pairs_metrics['mrr']:>8.3f}")
+                    print(f"  {'Without-Pairs':<15} {without_pairs_metrics['N']:>6} {without_pairs_metrics['top1']:>7.2f}% {without_pairs_metrics['top5']:>7.2f}% {without_pairs_metrics['mrr']:>8.3f}")
+
+                except Exception as e:
+                    print(f"  ❌ Error evaluating {model_name}: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+            print("\n" + "="*80)
+            print("\nKey Insights:")
+            print("  - With-Pairs tests herb→field generalization (field images in validation)")
+            print("  - Without-Pairs is herb→herb baseline (herbarium only)")
+            print("  - Compare to test set results to check for overfitting")
+            print()
+            input("Press Enter to continue...")
+            self.crossdomain_menu()
+
+        elif choice == '7':
+            # Evaluate test set with detailed breakdown
+            print("\n📊 Evaluate Test Set (Detailed Breakdown)")
+            print()
+
+            results_dir = "Approach_A_Feature_Extraction/results_crossdomain"
+            features_base = "Approach_A_Feature_Extraction/features_crossdomain"
+            output_dir = "Approach_A_Feature_Extraction/evaluation_results_crossdomain"
+
+            if not os.path.exists(results_dir):
+                print(f"❌ Results directory not found: {results_dir}")
+                print("   Train classifiers first (Option 3)")
+                input("\nPress Enter to continue...")
+                self.crossdomain_menu()
+                return
+
+            # Check if test features exist
+            test_features_exist = False
+            for model_dir in os.listdir(features_base):
+                test_feat_file = os.path.join(features_base, model_dir, "test_features.npy")
+                if os.path.exists(test_feat_file):
+                    test_features_exist = True
+                    break
+
+            if not test_features_exist:
+                print("❌ Test features not found")
+                print("   Extract features with test set first (Option 2)")
+                input("\nPress Enter to continue...")
+                self.crossdomain_menu()
+                return
+
+            print("🔄 Running detailed test evaluation...")
+            print("This will evaluate all trained models on the test set with:")
+            print("  - Overall / With-Pairs / Without-Pairs breakdown")
+            print("  - Top-1, Top-5, MRR metrics")
+            print()
+
+            # Run evaluation script
+            result = subprocess.run([
+                'python', 'Approach_A_Feature_Extraction/evaluate_classifiers_detailed.py',
+                '--results_dir', results_dir,
+                '--features_base', features_base,
+                '--with_pairs', 'Dataset/list/class_with_pairs.txt',
+                '--without_pairs', 'Dataset/list/class_without_pairs.txt',
+                '--groundtruth', 'Dataset/list/groundtruth.txt',
+                '--output_dir', output_dir
+            ], capture_output=False, text=True)
+
+            if result.returncode == 0:
+                print("\n✅ Evaluation complete!")
+                print(f"📁 Results saved to: {output_dir}")
+
+                # Display results if available
+                detailed_results_file = os.path.join(output_dir, "detailed_results.json")
+                if os.path.exists(detailed_results_file):
+                    print("\n" + "="*80)
+                    print("TEST SET RESULTS (Cross-Domain Models)")
+                    print("="*80)
+
+                    with open(detailed_results_file, 'r') as f:
+                        test_results = json.load(f)
+
+                    print(f"\n{'Model':<35} {'Category':<15} {'Top-1':>8} {'Top-5':>8} {'MRR':>8}")
+                    print("=" * 80)
+
+                    for model_name in sorted(test_results.keys()):
+                        categories = test_results[model_name]
+                        for i, (cat_name, metrics) in enumerate([
+                            ('overall', categories.get('overall', {})),
+                            ('with_pairs', categories.get('with_pairs', {})),
+                            ('without_pairs', categories.get('without_pairs', {}))
+                        ]):
+                            model_col = model_name if i == 0 else ""
+                            top1 = metrics.get('top1', 0)
+                            top5 = metrics.get('top5', 0)
+                            mrr = metrics.get('mrr', 0)
+                            print(f"{model_col:<35} {cat_name:<15} {top1:>7.2f}% {top5:>7.2f}% {mrr:>8.3f}")
+                        print("-" * 80)
+
+                    print("\nKey Insights:")
+                    print("  - Compare Test vs Validation to check for overfitting")
+                    print("  - Without-Pairs shows real cross-domain challenge")
+                    print("  - Use Option 4 to compare Old vs New validation approaches")
+            else:
+                print("\n❌ Evaluation failed")
+                print("   Check error messages above")
+
+            print()
+            input("Press Enter to continue...")
+            self.crossdomain_menu()
+
+        elif choice == '0':
+            return
+        else:
+            print("\n❌ Invalid option")
+            input("Press Enter to continue...")
+            self.crossdomain_menu()
+
     def run(self):
         """Main run loop"""
         while self.running:
@@ -1349,6 +2066,11 @@ class TrainingManager:
 def main():
     """Entry point"""
     import subprocess  # Import here to avoid issues
+    import sys
+
+    # Set UTF-8 encoding for Windows console
+    if sys.platform == 'win32':
+        sys.stdout.reconfigure(encoding='utf-8')
 
     print("\n" + "="*70)
     print("  🌱 Plant Identification - Training Manager")
