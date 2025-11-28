@@ -1,0 +1,7 @@
+{
+    "split": "training",
+    "num_classes": 100,
+    "total_images": 16000,
+    "herbarium_images": 16000,
+    "field_images": 0
+}
