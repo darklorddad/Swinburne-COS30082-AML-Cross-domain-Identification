@@ -323,11 +323,17 @@ def get_gradcam(model, input_tensor, original_img):
         else:
             try:
                 output = model(**input_tensor)
-            except TypeError:
-                if "pixel_values" in input_tensor:
-                    output = model(input_tensor["pixel_values"])
-                else:
-                    raise
+            except (TypeError, ValueError):
+                try:
+                    if "pixel_values" in input_tensor:
+                        output = model(input_tensor["pixel_values"])
+                    else:
+                        raise
+                except (TypeError, ValueError):
+                    if "pixel_values" in input_tensor:
+                        output = model(input_tensor["pixel_values"], return_dict=False)
+                    else:
+                        output = model(**input_tensor, return_dict=False)
 
         if hasattr(output, "logits"):
             logits = output.logits
