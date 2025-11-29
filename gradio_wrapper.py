@@ -489,7 +489,7 @@ def extract_features_and_logits(model, processor, batch_images, device, model_ty
             
             # Try to get hidden states
             try:
-                outputs = model(**inputs, output_hidden_states=True)
+                outputs = model(**inputs, output_hidden_states=True, return_dict=True)
             except (TypeError, ValueError):
                 # Try return_dict=False to bypass ImageClassifierOutput init errors (e.g. pooler_output issue)
                 try:
