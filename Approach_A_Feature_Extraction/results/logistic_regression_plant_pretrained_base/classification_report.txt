@@ -4,7 +4,7 @@ Logistic Regression Classification Report
 Best Parameters: {'C': 1, 'max_iter': 1000, 'penalty': 'l2', 'solver': 'lbfgs'}
 Best CV Score: 0.9873
 Validation Accuracy: 0.9980
-Training Time: 81.49 seconds
+Training Time: 62.14 seconds
 
 ================================================================================
 

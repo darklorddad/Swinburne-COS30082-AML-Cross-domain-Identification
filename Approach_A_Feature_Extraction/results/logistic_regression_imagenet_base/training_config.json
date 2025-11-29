@@ -7,7 +7,7 @@
     },
     "best_cv_score": 0.987312468652838,
     "val_accuracy": 0.998,
-    "training_time_seconds": 78.08132576942444,
+    "training_time_seconds": 64.69778752326965,
     "cv_results": {
         "mean_test_scores": [
             0.9461871949111554,
