@@ -64,7 +64,7 @@ def plot_tsne(embeddings, true_labels, mrr_score, is_logits=False, perplexity=30
         color = cmap(i / len(unique_labels))
         ax.scatter(points[:, 0], points[:, 1], label=label, color=color, s=10, alpha=0.8)
     
-    title = f"t-SNE Visualisation (MRR: {mrr_score:.4f})"
+    title = "t-SNE Visualisation"
     if is_logits:
         title += "\n(Feature extraction failed; using logits)"
     ax.set_title(title)
@@ -72,7 +72,6 @@ def plot_tsne(embeddings, true_labels, mrr_score, is_logits=False, perplexity=30
     if len(unique_labels) <= 20:
         ax.legend()
     
-    ax.margins(0.2)
     plt.tight_layout()
     return fig
 
