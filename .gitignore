@@ -28,6 +28,7 @@ Dataset/test/
 
 # Large Model Checkpoints (exclude these from results directories)
 *.pth
+*.pth.tar
 *.joblib
 *.npy
 **/best_model.*
@@ -35,8 +36,12 @@ Dataset/test/
 **/val_predictions.*
 **/val_predictions_proba.*
 
+# Specific large model checkpoint
+dinov2_patch14_reg4_onlyclassifier_th/model_best.pth.tar
+
 # Archives
 *.zip
+*.tar
 *.tar.gz
 *.rar
 *.7z
