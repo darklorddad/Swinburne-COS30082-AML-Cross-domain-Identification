@@ -66,8 +66,8 @@ def parse_args():
                         help='Output directory for results')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='Batch size for inference')
-    parser.add_argument('--image_size', type=int, default=224,
-                        help='Input image size')
+    parser.add_argument('--image_size', type=int, default=518,
+                        help='Input image size (DINOv2 standard: 518)')
     return parser.parse_args()
 
 
@@ -117,13 +117,59 @@ def load_model(model_dir, device):
         return None, None
 
     try:
-        model.load_state_dict(torch.load(model_path, map_location=device))
+        # Load checkpoint
+        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+
+        # Handle different checkpoint formats
+        if isinstance(checkpoint, dict) and 'model' in checkpoint:
+            state_dict = checkpoint['model']
+        else:
+            state_dict = checkpoint
+
+        # Handle class count mismatch (e.g., 101 vs 100 classes)
+        # Check if head layer has different size
+        head_weight_key = 'head.weight'
+        head_bias_key = 'head.bias'
+
+        if head_weight_key in state_dict:
+            checkpoint_classes = state_dict[head_weight_key].shape[0]
+            if checkpoint_classes != num_classes:
+                print(f"   [⚠️] Class count mismatch: checkpoint has {checkpoint_classes}, model expects {num_classes}")
+                print(f"   [🔧] Resizing head layer: using first {num_classes} classes from checkpoint")
+
+                # Truncate or pad the head layer to match
+                if checkpoint_classes > num_classes:
+                    # Truncate (use first num_classes)
+                    state_dict[head_weight_key] = state_dict[head_weight_key][:num_classes, :]
+                    state_dict[head_bias_key] = state_dict[head_bias_key][:num_classes]
+                else:
+                    # Pad with zeros (torch is already imported at module level)
+                    pad_size = num_classes - checkpoint_classes
+                    state_dict[head_weight_key] = torch.cat([
+                        state_dict[head_weight_key],
+                        torch.zeros(pad_size, state_dict[head_weight_key].shape[1])
+                    ], dim=0)
+                    state_dict[head_bias_key] = torch.cat([
+                        state_dict[head_bias_key],
+                        torch.zeros(pad_size)
+                    ], dim=0)
+
+        # Load with strict=False to handle minor mismatches
+        missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
+
+        if missing_keys:
+            print(f"   [⚠️] Missing keys: {len(missing_keys)}")
+        if unexpected_keys:
+            print(f"   [⚠️] Unexpected keys: {len(unexpected_keys)}")
+
         model = model.to(device)
         model.eval()
         print(f"   [+] Loaded model: {model_type}")
         return model, config
     except Exception as e:
         print(f"   [!] Failed to load weights: {e}")
+        import traceback
+        traceback.print_exc()
         return None, None
 
 

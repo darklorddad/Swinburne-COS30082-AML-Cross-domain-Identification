@@ -127,7 +127,7 @@ def load_model(model_type, plant_model_path, num_classes, dropout):
     # Load custom plant weights if needed
     if model_type == 'plant_pretrained_base' and os.path.exists(plant_model_path):
         print(f"   Loading plant-pretrained weights from: {plant_model_path}")
-        checkpoint = torch.load(plant_model_path, map_location='cpu')
+        checkpoint = torch.load(plant_model_path, map_location='cpu', weights_only=False)
 
         if 'state_dict' in checkpoint:
             state_dict = checkpoint['state_dict']

@@ -88,7 +88,7 @@ def load_plant_pretrained_model(model_path, num_classes=100, dropout=0.4):
     # Load plant-pretrained weights
     if os.path.exists(model_path):
         print(f"   Loading from: {model_path}")
-        checkpoint = torch.load(model_path, map_location='cpu')
+        checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
 
         # Handle different checkpoint formats
         if 'state_dict' in checkpoint:
