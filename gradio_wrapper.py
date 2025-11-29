@@ -498,14 +498,21 @@ def extract_features_and_logits(model, processor, batch_images, device, model_ty
                     # Model might not support output_hidden_states kwarg or **inputs
                     try:
                         if "pixel_values" in inputs:
-                            outputs = model(inputs["pixel_values"])
+                            # Try passing control args explicitly with pixel_values
+                            outputs = model(inputs["pixel_values"], output_hidden_states=True, return_dict=True)
                         else:
                             outputs = model(**inputs)
                     except (TypeError, ValueError):
-                        if "pixel_values" in inputs:
-                            outputs = model(inputs["pixel_values"], return_dict=False)
-                        else:
-                            outputs = model(**inputs, return_dict=False)
+                        try:
+                            if "pixel_values" in inputs:
+                                outputs = model(inputs["pixel_values"])
+                            else:
+                                outputs = model(**inputs)
+                        except (TypeError, ValueError):
+                            if "pixel_values" in inputs:
+                                outputs = model(inputs["pixel_values"], return_dict=False)
+                            else:
+                                outputs = model(**inputs, return_dict=False)
 
             # Determine Logits
             if hasattr(outputs, "logits"):
