@@ -498,11 +498,12 @@ def extract_features_and_logits(model, processor, batch_images, device, model_ty
                     # Model might not support output_hidden_states kwarg or **inputs
                     try:
                         if "pixel_values" in inputs:
-                            # Try passing control args explicitly with pixel_values
-                            outputs = model(inputs["pixel_values"], output_hidden_states=True, return_dict=True)
+                            # Try passing control args explicitly with pixel_values as kwargs
+                            outputs = model(pixel_values=inputs["pixel_values"], output_hidden_states=True, return_dict=True)
                         else:
                             outputs = model(**inputs)
-                    except (TypeError, ValueError):
+                    except (TypeError, ValueError) as e:
+                        print(f"Feature extraction attempt failed: {e}")
                         try:
                             if "pixel_values" in inputs:
                                 outputs = model(inputs["pixel_values"])
@@ -525,8 +526,18 @@ def extract_features_and_logits(model, processor, batch_images, device, model_ty
             # Determine Embeddings
             if hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
                 batch_emb_numpy = outputs.pooler_output.cpu().numpy()
+            elif isinstance(outputs, dict) and 'pooler_output' in outputs and outputs['pooler_output'] is not None:
+                batch_emb_numpy = outputs['pooler_output'].cpu().numpy()
             elif hasattr(outputs, 'hidden_states') and outputs.hidden_states:
                 last_hidden = outputs.hidden_states[-1]
+                if last_hidden.dim() == 4:
+                    batch_emb_numpy = last_hidden.mean(dim=[2, 3]).cpu().numpy()
+                elif last_hidden.dim() == 3:
+                    batch_emb_numpy = last_hidden.mean(dim=1).cpu().numpy()
+                else:
+                    batch_emb_numpy = last_hidden.cpu().numpy()
+            elif isinstance(outputs, dict) and 'hidden_states' in outputs and outputs['hidden_states']:
+                last_hidden = outputs['hidden_states'][-1]
                 if last_hidden.dim() == 4:
                     batch_emb_numpy = last_hidden.mean(dim=[2, 3]).cpu().numpy()
                 elif last_hidden.dim() == 3:
