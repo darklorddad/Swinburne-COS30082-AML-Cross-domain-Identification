@@ -561,10 +561,35 @@ def extract_features_and_logits(model, processor, batch_images, device, model_ty
                     batch_emb_numpy = logits.cpu().numpy() if isinstance(logits, torch.Tensor) else logits
                     fallback_to_logits = True
             else:
-                # LOUD FAILURE for feature extraction
-                print("WARNING: Feature extraction failed! Model does not return hidden_states or pooler_output. Falling back to logits.")
-                batch_emb_numpy = logits.cpu().numpy() if isinstance(logits, torch.Tensor) else logits
-                fallback_to_logits = True
+                # Try accessing backbone directly (Custom ArcFace fallback)
+                if hasattr(model, "backbone"):
+                    try:
+                        if "pixel_values" in inputs:
+                            pv = inputs["pixel_values"]
+                        else:
+                            # Try to find tensor in inputs values
+                            pv = next(v for v in inputs.values() if isinstance(v, torch.Tensor))
+                        
+                        # Forward pass through backbone only
+                        features = model.backbone(pv)
+                        
+                        # Apply simple pooling
+                        if features.dim() == 4:
+                            batch_emb_numpy = features.mean(dim=[2, 3]).cpu().numpy()
+                        elif features.dim() == 3:
+                            batch_emb_numpy = features.mean(dim=1).cpu().numpy()
+                        else:
+                            batch_emb_numpy = features.cpu().numpy()
+                            
+                    except Exception as e:
+                        print(f"Backbone fallback failed: {e}")
+                        batch_emb_numpy = None
+
+                if batch_emb_numpy is None:
+                    # LOUD FAILURE for feature extraction
+                    print("WARNING: Feature extraction failed! Model does not return hidden_states or pooler_output. Falling back to logits.")
+                    batch_emb_numpy = logits.cpu().numpy() if isinstance(logits, torch.Tensor) else logits
+                    fallback_to_logits = True
 
         elif model_type == "timm":
             tensors = [processor(img) for img in batch_images]
