@@ -72,6 +72,7 @@ def plot_tsne(embeddings, true_labels, mrr_score, is_logits=False, perplexity=30
     if len(unique_labels) <= 20:
         ax.legend()
     
+    ax.margins(0.2)
     plt.tight_layout()
     return fig
 
