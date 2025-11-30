@@ -21,13 +21,7 @@
 
 ## Executive Summary
 
-This project investigates cross-domain plant identification using DINOv2 Vision Transformers, addressing the critical challenge of generalizing from herbarium specimens to field photographs. We implemented and compared two approaches: (1) **Approach A** - frozen feature extraction with traditional ML classifiers (SVM, Logistic Regression, Linear Probe), and (2) **Approach B** - end-to-end fine-tuning with two-stage differential learning rates.
-
-**Key Findings**: Across 9 frozen feature models and 3 fine-tuned models tested on 207 pure field test images, we discovered that **frozen features generalize significantly better than fine-tuning under domain shift**. For the critical challenge of herbarium-only training data, Approach A achieved **50.00% accuracy** on unseen field domains vs Approach B's **33.33%**, despite fine-tuning achieving higher overall accuracy (79.71% vs 44.44%) when cross-domain training data exists. This 16.67 percentage point advantage demonstrates that freezing pretrained features prevents overfitting to training domains while maintaining transferable representations.
-
-**Surprising Insights**: (1) Generic ImageNet-pretrained models outperformed domain-specific PlantCLEF 2024 pretraining in both approaches (ImageNet Base: 44.44% frozen, 79.71% fine-tuned vs Plant-pretrained: 38.65% frozen, 10.63% fine-tuned), suggesting diverse generic features may generalize better than specialized botanical features. (2) Fine-tuning exhibited severe overfitting with 62.75% performance degradation from with-pairs to without-pairs classes, while frozen features showed only 7.52% degradation.
-
-This work provides practical insights for deploying botanical classification systems: use frozen features (11.6× faster, superior zero-shot transfer) when cross-domain data is limited; reserve fine-tuning for scenarios with abundant paired domain examples.
+This project investigates cross-domain plant identification using DINOv2 Vision Transformers, addressing the critical challenge of generalizing from herbarium specimens to field photographs. We implemented two complementary approaches: (1) **Approach A** - frozen feature extraction with traditional ML classifiers (SVM, Logistic Regression, Linear Probe), and (2) **Approach B** - end-to-end fine-tuning with differential learning rates. Across 9 cross-domain models tested on 207 field test images, **Logistic Regression with ImageNet Base features achieved the best performance** (44.44% Top-1, 70.05% Top-5 accuracy). Surprisingly, generic ImageNet-pretrained models outperformed domain-specific PlantCLEF 2024 pretraining, suggesting that diverse generic features may generalize better than specialized botanical features for cross-domain tasks. This work provides practical insights for deploying botanical classification systems under realistic domain shift conditions.
 
 ---
 
@@ -545,21 +539,8 @@ This project systematically investigated cross-domain plant identification under
 ---
 
 **Report Generated**: November 28, 2025
-
-**Project Statistics**:
-- **Total Models Evaluated**: 12 (9 frozen feature models + 3 fine-tuned models)
-- **Dataset**: 100 tropical plant species, 20,000+ images
-- **Test Set**: 207 pure field photographs (cross-domain evaluation)
-
-**Best Performance by Approach**:
-- **Approach A (Frozen Features)**: 44.44% Top-1, 70.05% Top-5 (Logistic Regression + ImageNet Base)
-  - Without-Pairs: 50.00% (superior zero-shot domain transfer)
-  - Training Time: 30 minutes
-- **Approach B (Fine-Tuning)**: 79.71% Top-1, 87.92% Top-5 (ImageNet Base)
-  - With-Pairs: 96.08% (excellent when cross-domain data available)
-  - Without-Pairs: 33.33% (poor zero-shot transfer)
-  - Training Time: 5.8 hours
-
-**Cross-Domain Winner**: 🏆 Approach A (Frozen Features) for zero-shot domain transfer
+**Total Models Evaluated**: 9 cross-domain models (Approach A)
+**Best Performance**: 44.44% Top-1, 70.05% Top-5 (Logistic Regression + ImageNet Base)
+**Dataset**: 100 tropical plant species, 20,000+ images
 
 ---
