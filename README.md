@@ -48,8 +48,8 @@ We compared the performance of the Standard model (Cross-Entropy Loss) and the A
 | :--- | :--- | :--- | :--- | :--- |
 | **Standard (Normal)** | Standard | 0.548 | 47.8% | 61.4% |
 | | Prototype | 0.568 | 48.3% | 65.7% |
-| **ArcFace** | Standard | 0.544 | 47.3% | 62.3% |
-| | Prototype | **0.569** | **50.2%** | 64.7% |
+| **ArcFace** | Standard | 0.544 (-0.004) | 47.3% (-0.5%) | 62.3% (+0.9%) |
+| | Prototype | **0.569** (+0.001) | **50.2%** (+1.9%) | 64.7% (-1.0%) |
 
 #### t-SNE Visualisation
 To evaluate the effectiveness of the embeddings learned by the model, we use t-SNE (t-Distributed Stochastic Neighbor Embedding) to visualise the high-dimensional features in 2D space.
