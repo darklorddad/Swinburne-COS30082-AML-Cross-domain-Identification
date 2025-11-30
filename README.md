@@ -35,11 +35,26 @@ The architecture utilises a **ConvNeXt V2 Nano** backbone with an ArcFace head.
 ---
 
 ### Results and Visualisation
+
+#### Performance Comparison
+We compared the performance of the Standard model (Cross-Entropy Loss) and the ArcFace model using two evaluation methods:
+1.  **Standard Classification**: Using the classification head (linear layer).
+2.  **Prototype Retrieval**: Using nearest neighbour search with class prototypes computed from training embeddings.
+
+![Prototype Retrieval Flow](Images/Prototype-Retrieval-Flow.png)
+
+| Model | Method | MRR | Top-1 Accuracy | Top-5 Accuracy |
+| :--- | :--- | :--- | :--- | :--- |
+| **Standard (Normal)** | Standard | 0.548 | 47.8% | 61.4% |
+| | Prototype | 0.568 | 48.3% | 65.7% |
+| **ArcFace** | Standard | 0.544 | 47.3% | 62.3% |
+| | Prototype | **0.569** | **50.2%** | 64.7% |
+
+#### t-SNE Visualisation
 To evaluate the effectiveness of the embeddings learned by the model, we use t-SNE (t-Distributed Stochastic Neighbor Embedding) to visualise the high-dimensional features in 2D space.
 
 ![Softmax vs ArcFace](Images/Softmax-vs-ArcFace.png)
 
-### t-SNE Visualisation
 The plots below show the clustering of different plant species, comparing the standard approach (top) with ArcFace (bottom).
 
 ![Standard t-SNE](Model-ConvNeXt-V2-Nano-A1-MH-62/t-SNE/tsne_plot.png)
