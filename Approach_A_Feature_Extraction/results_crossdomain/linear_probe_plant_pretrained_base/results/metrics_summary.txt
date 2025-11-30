@@ -1,0 +1,9 @@
+============================================================
+METRICS SUMMARY
+============================================================
+
+best_val_accuracy: 69.4452
+final_train_loss: 0.7994
+final_val_loss: 2.2164
+training_time_seconds: 6.0842
+epochs_trained: 17

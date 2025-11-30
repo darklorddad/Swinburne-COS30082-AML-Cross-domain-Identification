@@ -1,0 +1,7 @@
+{
+    "split": "validation",
+    "num_classes": 100,
+    "total_images": 4000,
+    "herbarium_images": 3160,
+    "field_images": 840
+}

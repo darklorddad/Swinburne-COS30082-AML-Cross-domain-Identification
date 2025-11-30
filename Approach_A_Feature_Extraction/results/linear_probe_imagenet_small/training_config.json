@@ -1,0 +1,15 @@
+{
+    "input_dim": 384,
+    "num_classes": 100,
+    "epochs_trained": 59,
+    "best_val_accuracy": 99.7,
+    "hyperparameters": {
+        "learning_rate": 0.001,
+        "weight_decay": 0.01,
+        "label_smoothing": 0.1,
+        "batch_size": 128,
+        "max_epochs": 100,
+        "patience": 15
+    },
+    "training_time_seconds": 42.347562074661255
+}

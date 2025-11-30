@@ -1,0 +1,17 @@
+{
+    "total_classes": 100,
+    "total_images": 4744,
+    "domain_distribution": {
+        "field": 1044,
+        "herbarium": 3700
+    },
+    "classes_with_field_images": 60,
+    "classes_without_field_images": 40,
+    "class_size_statistics": {
+        "min": 22,
+        "max": 50,
+        "mean": 47.44,
+        "median": 50.0,
+        "std": 7.013301647583682
+    }
+}

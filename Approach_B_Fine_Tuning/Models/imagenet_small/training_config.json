@@ -1,0 +1,26 @@
+{
+    "model_type": "imagenet_small",
+    "model_name": "vit_small_patch14_reg4_dinov2.lvd142m",
+    "num_classes": 101,
+    "epochs_trained": 27,
+    "best_val_accuracy": 99.8,
+    "hyperparameters": {
+        "model_type": "imagenet_small",
+        "train_dir": "Dataset/balanced_train",
+        "val_dir": "Dataset/validation",
+        "plant_model_path": "Models/pretrained/model_best.pth.tar",
+        "output_dir": "Approach_B_Fine_Tuning/Models/imagenet_small",
+        "epochs": 30,
+        "batch_size": 32,
+        "image_size": 518,
+        "lr_head": 0.001,
+        "lr_backbone": 0.0001,
+        "weight_decay": 0.05,
+        "label_smoothing": 0.1,
+        "dropout": 0.4,
+        "patience": 15,
+        "warmup_epochs": 5,
+        "num_workers": 4
+    },
+    "training_time_seconds": 11500.7423183918
+}

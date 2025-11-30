@@ -1,0 +1,129 @@
+{
+  "last_updated": "2025-11-27T09:00:49.337429",
+  "approach_a": {
+    "features": {
+      "plant_pretrained_base": {
+        "status": "completed",
+        "last_run": "2025-11-27T06:46:52.351685",
+        "error": null
+      },
+      "imagenet_small": {
+        "status": "completed",
+        "last_run": "2025-11-27T06:34:47.009734",
+        "error": null
+      },
+      "imagenet_base": {
+        "status": "completed",
+        "last_run": "2025-11-27T03:49:13.281180",
+        "error": null
+      },
+      "imagenet_large": {
+        "status": "completed",
+        "last_run": "2025-11-26T23:47:14.162074",
+        "error": null
+      }
+    },
+    "models": {
+      "plant_pretrained_base_svm": {
+        "status": "completed",
+        "last_run": "2025-11-10T02:45:40.801338",
+        "error": null,
+        "metrics": {}
+      },
+      "plant_pretrained_base_linear_probe": {
+        "status": "completed",
+        "last_run": "2025-11-10T02:43:01.153250",
+        "error": null,
+        "metrics": {}
+      },
+      "plant_pretrained_base_logistic_regression": {
+        "status": "completed",
+        "last_run": "2025-11-27T08:55:24.712055",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_small_svm": {
+        "status": "in_progress",
+        "last_run": "2025-11-27T07:25:28.573889",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_small_linear_probe": {
+        "status": "completed",
+        "last_run": "2025-11-09T18:36:44.359890",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_small_logistic_regression": {
+        "status": "completed",
+        "last_run": "2025-11-27T08:56:38.278792",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_base_svm": {
+        "status": "completed",
+        "last_run": "2025-11-09T20:10:04.516837",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_base_linear_probe": {
+        "status": "completed",
+        "last_run": "2025-11-09T20:09:28.270245",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_base_logistic_regression": {
+        "status": "completed",
+        "last_run": "2025-11-27T08:57:40.327859",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_large_svm": {
+        "status": "completed",
+        "last_run": "2025-11-10T05:25:23.102894",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_large_linear_probe": {
+        "status": "completed",
+        "last_run": "2025-11-10T05:23:12.803274",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_large_logistic_regression": {
+        "status": "completed",
+        "last_run": "2025-11-27T08:58:56.726779",
+        "error": null,
+        "metrics": {}
+      }
+    }
+  },
+  "approach_b": {
+    "models": {
+      "plant_pretrained_base": {
+        "status": "completed",
+        "last_run": "2025-11-23T19:47:21.677189",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_small": {
+        "status": "completed",
+        "last_run": "2025-11-11T09:00:40.357864",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_base": {
+        "status": "completed",
+        "last_run": "2025-11-13T02:37:53.100406",
+        "error": null,
+        "metrics": {}
+      },
+      "imagenet_large": {
+        "status": "completed",
+        "last_run": "2025-11-23T10:37:26.082265",
+        "error": null,
+        "metrics": {}
+      }
+    }
+  }
+}
