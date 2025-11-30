@@ -3,9 +3,25 @@ import gradio as gr
 import random
 import torch
 import torch.nn.functional as F
+import transformers
 from transformers import AutoImageProcessor, AutoModelForImageClassification, AutoConfig
+import transformers.modeling_outputs
+from dataclasses import dataclass
+from typing import Optional
+
+# Patch ImageClassifierOutput to accept pooler_output which some custom models erroneously pass
+@dataclass
+class PatchedImageClassifierOutput(transformers.modeling_outputs.ImageClassifierOutput):
+    pooler_output: Optional[torch.FloatTensor] = None
+
+transformers.modeling_outputs.ImageClassifierOutput = PatchedImageClassifierOutput
+if hasattr(transformers, "ImageClassifierOutput"):
+    transformers.ImageClassifierOutput = PatchedImageClassifierOutput
+
 from PIL import Image
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import json
 import re
