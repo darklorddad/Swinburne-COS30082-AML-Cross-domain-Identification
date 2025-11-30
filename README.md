@@ -19,7 +19,7 @@ We employ a deep learning approach using **ArcFace (Additive Angular Margin Loss
 2.  **Domain Shift**: It encourages the model to learn class-specific features that are robust across the herbarium and field domains.
 
 ### Model Architecture
-The architecture utilises a CNN backbone (e.g., ResNet or ViT) with an ArcFace head.
+The architecture utilises a **ConvNeXt V2 Nano** backbone with an ArcFace head.
 
 ![ArcFace Model Architecture](path/to/your/arcface_architecture_image.png)
 
@@ -27,7 +27,7 @@ The architecture utilises a CNN backbone (e.g., ResNet or ViT) with an ArcFace h
 To evaluate the effectiveness of the embeddings learned by the model, we use t-SNE (t-Distributed Stochastic Neighbor Embedding) to visualise the high-dimensional features in 2D space.
 
 ### t-SNE Visualisation
-The plot below shows the clustering of different plant species.
+The plots below show the clustering of different plant species, comparing the standard approach with ArcFace.
 
-![t-SNE Visualisation](path/to/your/tsne_visualisation.png)
-![t-SNE Visualisation](path/to/your/tsne_visualisation.png)
+![Standard t-SNE](path/to/your/standard_tsne.png)
+![ArcFace t-SNE](path/to/your/arcface_tsne.png)
