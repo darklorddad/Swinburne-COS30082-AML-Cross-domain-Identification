@@ -90,3 +90,10 @@ logs/
 *.tmp
 *.temp
 /.claude
+# Ignore the zip file
+OneDrive_1_10-30-2025.zip
+
+# Ignore the pdf and docx files
+*.pdf
+*.docx
+*.jpg
