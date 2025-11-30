@@ -23,9 +23,10 @@ Below is the distribution of the dataset, highlighting the class imbalance and t
 ---
 
 ### Methodology
-We employ a deep learning approach using **ArcFace (Additive Angular Margin Loss)**. ArcFace is chosen for its ability to learn highly discriminative features, which is beneficial for handling:
-1.  **Class Imbalance**: By enforcing a margin, it prevents the model from ignoring minority classes.
-2.  **Domain Shift**: It encourages the model to learn class-specific features that are robust across the herbarium and field domains.
+We employ a deep learning approach using **ArcFace (Additive Angular Margin Loss)** combined with a **Class Balanced Sampler**.
+
+1.  **ArcFace**: ArcFace is chosen for its ability to learn highly discriminative features. It encourages the model to learn class-specific features that are robust across the herbarium and field domains (Domain Shift).
+2.  **Class Balanced Sampler**: To address the severe class imbalance in the dataset, we utilise a Class Balanced Sampler during training. This ensures that minority classes are sampled more frequently, preventing the model from being biased towards majority classes.
 
 ### Model Architecture
 The architecture utilises a **ConvNeXt V2 Nano** backbone with an ArcFace head.
