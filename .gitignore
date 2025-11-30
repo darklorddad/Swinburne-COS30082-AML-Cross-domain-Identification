@@ -5,13 +5,27 @@ AML-dataset/AML_project_herbarium_dataset/test/
 AML-dataset/AML_project_herbarium_dataset/train/
 Dataset-PlantCLEF-2020-Challenge/Images/Split-set/
 Dataset-PlantCLEF-2020-Challenge/Images/Test-set/
-Dataset-PlantCLEF-2020-Challenge/Validate.zip
-Dataset-PlantCLEF-2020-Challenge/Train.zip
-Model-*
 Project-Execution-Plan-Cross-domain-Plant-Species-Identification.md
 Dataset-PlantCLEF-2020-Challenge/Test-backup/
-Basil/
-wandb/
+Dataset-PlantCLEF-2020-Challenge/Images/Split-set-with-pair/
+Dataset-PlantCLEF-2020-Challenge/Images/Split-set-without-pair/
+Dataset-PlantCLEF-2020-Challenge/Mix-set/Train.zip
+Dataset-PlantCLEF-2020-Challenge/Mix-set/Validate.zip
+Dataset-PlantCLEF-2020-Challenge/With-pair-set/Train-with-pair.zip
+Dataset-PlantCLEF-2020-Challenge/With-pair-set/Validate-with-pair.zip
+Dataset-PlantCLEF-2020-Challenge/Without-pair-set/Train-without-pair.zip
+Dataset-PlantCLEF-2020-Challenge/Without-pair-set/Validate-without-pair.zip
+~$*
+autotrain-*
+Videos/
+Cross-Domain-Plant-Species-Identification.pptx
+Documents/Cross-Domain-Plant-Species-Identification/
+Model-ConvNeXt-V2-Nano-A3-MH-64/
+Model-ConvNeXt-V2-Nano-A1-WP-63/
+Model-ConvNeXt-V2-Nano-A1-WOP-81/
+Model-ConvNeXt-V2-Nano-A1-MH-62/
+config.json
+!inference_app/Model-ConvNeXt-V2-Nano-A3-MH/config.json
 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
