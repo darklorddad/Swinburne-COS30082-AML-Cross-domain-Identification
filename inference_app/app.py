@@ -1,4 +1,5 @@
 import os
+import zipfile
 import gradio as gr
 import random
 import torch
@@ -781,29 +782,63 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     found_folders = []
     skipped_folders = []
     
-    for root, dirs, files in os.walk(test_dir):
-        if os.path.abspath(root) == os.path.abspath(test_dir):
-            continue # Skip root folder
+    is_zip = os.path.isfile(test_dir) and test_dir.lower().endswith('.zip')
+
+    if is_zip:
+        try:
+            zf = zipfile.ZipFile(test_dir, 'r')
+            all_files = zf.namelist()
             
-        folder_name = os.path.basename(root)
-        found_folders.append(folder_name)
-        
-        # Try exact match
-        matched_label = None
-        if folder_name in label2id:
-            matched_label = folder_name
-        # Try normalized match
-        elif normalize_name(folder_name) in norm_model_labels:
-            matched_label = norm_model_labels[normalize_name(folder_name)]
-        
-        if not matched_label:
-            skipped_folders.append(folder_name)
-            continue
+            for filepath in all_files:
+                if filepath.endswith('/'): continue
+                if not filepath.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+                    continue
+                
+                # Extract folder name (class name)
+                parts = filepath.strip('/').split('/')
+                if len(parts) < 2: continue
+                
+                folder_name = parts[-2]
+                
+                matched_label = None
+                if folder_name in label2id:
+                    matched_label = folder_name
+                elif normalize_name(folder_name) in norm_model_labels:
+                    matched_label = norm_model_labels[normalize_name(folder_name)]
+                
+                if matched_label:
+                    image_paths.append(filepath)
+                    image_labels.append(matched_label)
+                    if folder_name not in found_folders: found_folders.append(folder_name)
+                else:
+                    if folder_name not in skipped_folders: skipped_folders.append(folder_name)
+            zf.close()
+        except Exception as e:
+            raise gr.Error(f"Failed to read ZIP file: {e}")
+    else:
+        for root, dirs, files in os.walk(test_dir):
+            if os.path.abspath(root) == os.path.abspath(test_dir):
+                continue # Skip root folder
+                
+            folder_name = os.path.basename(root)
+            found_folders.append(folder_name)
             
-        for f in files:
-            if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
-                image_paths.append(os.path.join(root, f))
-                image_labels.append(matched_label) # Use the model's label, not the folder name
+            # Try exact match
+            matched_label = None
+            if folder_name in label2id:
+                matched_label = folder_name
+            # Try normalized match
+            elif normalize_name(folder_name) in norm_model_labels:
+                matched_label = norm_model_labels[normalize_name(folder_name)]
+            
+            if not matched_label:
+                skipped_folders.append(folder_name)
+                continue
+                
+            for f in files:
+                if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff')):
+                    image_paths.append(os.path.join(root, f))
+                    image_labels.append(matched_label) # Use the model's label, not the folder name
 
     if not image_paths:
         # Generate a helpful error message
@@ -835,79 +870,89 @@ def evaluate_test_set(source_type, local_path, hf_id, pth_file, pth_arch, pth_cl
     try:
         with open(embeddings_path, 'wb') as f_emb:
             # Batch processing loop
-            for i in progress.tqdm(range(0, len(image_paths), batch_size), desc="Evaluating"):
-                batch_paths = image_paths[i : i + batch_size]
-                batch_labels = image_labels[i : i + batch_size]
-                
-                # Load images
-                batch_images = []
-                valid_indices = [] 
-                for idx, p in enumerate(batch_paths):
-                    try:
-                        img = Image.open(p).convert("RGB")
-                        batch_images.append(img)
-                        valid_indices.append(idx)
-                    except Exception:
-                        pass
-                
-                if not batch_images: continue
-
-                # Inference
-                batch_emb_numpy, logits, fallback = extract_features_and_logits(model, processor, batch_images, device, model_type)
-                
-                if fallback:
-                    fallback_to_logits = True
-
-                # Save embeddings to disk
-                if batch_emb_numpy is not None:
-                    np.save(f_emb, batch_emb_numpy)
-
-                # Determine Logits for Metrics
-                if eval_mode == "Prototype retrieval" and prototypes_tensor is not None and batch_emb_numpy is not None:
-                    # Cosine Similarity: (B, D) @ (C, D).T -> (B, C)
-                    # Ensure embeddings are normalized
-                    feats_t = torch.tensor(batch_emb_numpy, device=device)
-                    feats_t = torch.nn.functional.normalize(feats_t, dim=1)
+            zip_obj = zipfile.ZipFile(test_dir, 'r') if is_zip else None
+            try:
+                for i in progress.tqdm(range(0, len(image_paths), batch_size), desc="Evaluating"):
+                    batch_paths = image_paths[i : i + batch_size]
+                    batch_labels = image_labels[i : i + batch_size]
                     
-                    # Prototypes are already normalized
-                    sim_logits = torch.matmul(feats_t, prototypes_tensor.t())
+                    # Load images
+                    batch_images = []
+                    valid_indices = [] 
+                    for idx, p in enumerate(batch_paths):
+                        try:
+                            if is_zip:
+                                with zip_obj.open(p) as file_in_zip:
+                                    img = Image.open(file_in_zip).convert("RGB")
+                                    batch_images.append(img)
+                            else:
+                                img = Image.open(p).convert("RGB")
+                                batch_images.append(img)
+                            valid_indices.append(idx)
+                        except Exception:
+                            pass
                     
-                    # Use similarity as logits
-                    final_logits = sim_logits
-                else:
-                    # Standard Mode
-                    if isinstance(logits, torch.Tensor):
-                        final_logits = logits
+                    if not batch_images: continue
+
+                    # Inference
+                    batch_emb_numpy, logits, fallback = extract_features_and_logits(model, processor, batch_images, device, model_type)
+                    
+                    if fallback:
+                        fallback_to_logits = True
+
+                    # Save embeddings to disk
+                    if batch_emb_numpy is not None:
+                        np.save(f_emb, batch_emb_numpy)
+
+                    # Determine Logits for Metrics
+                    if eval_mode == "Prototype retrieval" and prototypes_tensor is not None and batch_emb_numpy is not None:
+                        # Cosine Similarity: (B, D) @ (C, D).T -> (B, C)
+                        # Ensure embeddings are normalized
+                        feats_t = torch.tensor(batch_emb_numpy, device=device)
+                        feats_t = torch.nn.functional.normalize(feats_t, dim=1)
+                        
+                        # Prototypes are already normalized
+                        sim_logits = torch.matmul(feats_t, prototypes_tensor.t())
+                        
+                        # Use similarity as logits
+                        final_logits = sim_logits
                     else:
-                        final_logits = torch.tensor(logits, device=device)
+                        # Standard Mode
+                        if isinstance(logits, torch.Tensor):
+                            final_logits = logits
+                        else:
+                            final_logits = torch.tensor(logits, device=device)
 
-                # Metrics Calculation
-                # For cosine similarity, higher is better, so softmax works (or just argsort directly)
-                # Softmax is monotonic, so argsort order is preserved.
-                probs = torch.nn.functional.softmax(final_logits, dim=1)
-                sorted_indices = torch.argsort(probs, descending=True, dim=1)
-                
-                for j, valid_idx in enumerate(valid_indices):
-                    gt_label = batch_labels[valid_idx]
-                    gt_id = label2id[gt_label]
+                    # Metrics Calculation
+                    # For cosine similarity, higher is better, so softmax works (or just argsort directly)
+                    # Softmax is monotonic, so argsort order is preserved.
+                    probs = torch.nn.functional.softmax(final_logits, dim=1)
+                    sorted_indices = torch.argsort(probs, descending=True, dim=1)
                     
-                    # Rank (MRR)
-                    try:
-                        rank = (sorted_indices[j] == gt_id).nonzero(as_tuple=True)[0].item() + 1
-                        ranks.append(1.0 / rank)
-                    except Exception:
-                        ranks.append(0)
+                    for j, valid_idx in enumerate(valid_indices):
+                        gt_label = batch_labels[valid_idx]
+                        gt_id = label2id[gt_label]
+                        
+                        # Rank (MRR)
+                        try:
+                            rank = (sorted_indices[j] == gt_id).nonzero(as_tuple=True)[0].item() + 1
+                            ranks.append(1.0 / rank)
+                        except Exception:
+                            ranks.append(0)
 
-                    # Top-1
-                    if sorted_indices[j][0] == gt_id:
-                        top1_correct += 1
-                        
-                    # Top-5
-                    if gt_id in sorted_indices[j][:5]:
-                        top5_correct += 1
-                        
-                    true_labels.append(gt_label)
-                    total_processed += 1
+                        # Top-1
+                        if sorted_indices[j][0] == gt_id:
+                            top1_correct += 1
+                            
+                        # Top-5
+                        if gt_id in sorted_indices[j][:5]:
+                            top5_correct += 1
+                            
+                        true_labels.append(gt_label)
+                        total_processed += 1
+            finally:
+                if zip_obj:
+                    zip_obj.close()
         
         if total_processed == 0:
             raise gr.Error("No valid labeled images found.")
@@ -1035,64 +1080,99 @@ def predict_and_retrieve(source_type, local_path, hf_id, pth_file, pth_arch, pth
     # 2. Retrieve Herbarium Images
     herbarium_images = []
     
-    # Look for Dataset/Split-set
     app_dir = os.path.dirname(os.path.abspath(__file__))
-    dataset_root = os.path.join(app_dir, "Dataset")
     
-    if not os.path.isdir(dataset_root):
+    # Check for ZIP first, then Folder
+    dataset_zip = os.path.join(app_dir, "Dataset.zip")
+    dataset_dir = os.path.join(app_dir, "Dataset")
+    
+    if not os.path.exists(dataset_zip) and not os.path.exists(dataset_dir):
         parent_dir = os.path.dirname(app_dir)
-        dataset_root = os.path.join(parent_dir, "Dataset")
-        
-    dataset_path = os.path.join(dataset_root, "Split-set")
+        dataset_zip = os.path.join(parent_dir, "Dataset.zip")
+        dataset_dir = os.path.join(parent_dir, "Dataset")
 
-    if os.path.isdir(dataset_path):
-        target_dir = None
-        
-        # Try exact match
-        possible_path = os.path.join(dataset_path, top_class)
-        if os.path.isdir(possible_path):
-            target_dir = possible_path
-        else:
-            # Try normalized match (snake_case vs spaces etc)
-            def normalize(n): return str(n).lower().replace(' ', '_').replace('-', '_')
-            
-            norm_top = normalize(top_class)
-            # List all directories in dataset path
-            try:
-                for d in os.listdir(dataset_path):
-                    full_d = os.path.join(dataset_path, d)
-                    if os.path.isdir(full_d):
-                        if normalize(d) == norm_top:
-                            target_dir = full_d
-                            break
-            except OSError:
-                pass
-        
-        if target_dir:
-            # Fetch images with 'herbarium' in name
-            try:
-                files = [os.path.join(target_dir, f) for f in os.listdir(target_dir) 
-                         if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff'))
-                         and 'herbarium' in f.lower()]
-                # Shuffle and pick a few
-                random.shuffle(files)
-                herbarium_images = files[:6] # Show top 6 matches
+    # Logic for ZIP
+    if os.path.isfile(dataset_zip):
+        try:
+            with zipfile.ZipFile(dataset_zip, 'r') as zf:
+                all_files = zf.namelist()
                 
-            except OSError:
-                pass
+                def normalize(n): return str(n).lower().replace(' ', '_').replace('-', '_')
+                norm_top = normalize(top_class)
+                
+                candidates = []
+                
+                for f in all_files:
+                    if not f.lower().endswith(('.jpg', '.jpeg', '.png')): continue
+                    if 'herbarium' not in f.lower(): continue
+                    
+                    parts = f.lower().split('/')
+                    if norm_top in [normalize(p) for p in parts]:
+                        candidates.append(f)
+                
+                if candidates:
+                    random.shuffle(candidates)
+                    selected_files = candidates[:6]
+                    
+                    for zip_path in selected_files:
+                        with zf.open(zip_path) as img_file:
+                            img = Image.open(img_file).convert("RGB")
+                            img_copy = img.copy() 
+                            herbarium_images.append(img_copy)
+                            
+        except Exception as e:
+            print(f"Error reading gallery from zip: {e}")
+
+    # Logic for Folder
+    elif os.path.isdir(dataset_dir):
+        dataset_path = os.path.join(dataset_dir, "Split-set")
+        if os.path.isdir(dataset_path):
+            target_dir = None
+            
+            possible_path = os.path.join(dataset_path, top_class)
+            if os.path.isdir(possible_path):
+                target_dir = possible_path
+            else:
+                def normalize(n): return str(n).lower().replace(' ', '_').replace('-', '_')
+                norm_top = normalize(top_class)
+                try:
+                    for d in os.listdir(dataset_path):
+                        full_d = os.path.join(dataset_path, d)
+                        if os.path.isdir(full_d):
+                            if normalize(d) == norm_top:
+                                target_dir = full_d
+                                break
+                except OSError:
+                    pass
+            
+            if target_dir:
+                try:
+                    files = [os.path.join(target_dir, f) for f in os.listdir(target_dir) 
+                             if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff'))
+                             and 'herbarium' in f.lower()]
+                    random.shuffle(files)
+                    herbarium_images = files[:6]
+                except OSError:
+                    pass
 
     return predictions, herbarium_images, heatmap
 
 # UI Construction
 app_dir = os.path.dirname(os.path.abspath(__file__))
-dataset_root = os.path.join(app_dir, "Dataset")
+dataset_zip = os.path.join(app_dir, "Dataset.zip")
+dataset_dir = os.path.join(app_dir, "Dataset")
 
-if not os.path.isdir(dataset_root):
+if not os.path.exists(dataset_zip) and not os.path.exists(dataset_dir):
     parent_dir = os.path.dirname(app_dir)
-    dataset_root = os.path.join(parent_dir, "Dataset")
+    dataset_zip = os.path.join(parent_dir, "Dataset.zip")
+    dataset_dir = os.path.join(parent_dir, "Dataset")
 
-default_test_dir = os.path.join(dataset_root, "Test-set")
-default_ref_dir = os.path.join(dataset_root, "Split-set")
+if os.path.isfile(dataset_zip):
+    default_test_dir = dataset_zip
+    default_ref_dir = dataset_zip
+else:
+    default_test_dir = os.path.join(dataset_dir, "Test-set")
+    default_ref_dir = os.path.join(dataset_dir, "Split-set")
 
 with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !important}", title="Plant Species Identification") as demo:
     
