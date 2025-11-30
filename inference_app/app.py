@@ -1188,7 +1188,7 @@ with gr.Blocks(theme=gr.themes.Monochrome(), css="footer {display: none !importa
             with gr.Accordion("Settings", open=False):
                 eval_mode = gr.Radio(["Standard", "Prototype retrieval"], label="Evaluation mode", value="Standard")
                 eval_batch_size = gr.Slider(minimum=1, maximum=128, value=32, step=1, label="Batch size")
-                eval_perplexity = gr.Slider(minimum=2, maximum=100, value=15, step=1, label="t-SNE perplexity")
+                eval_perplexity = gr.Slider(minimum=2, maximum=100, value=30, step=1, label="t-SNE perplexity")
             eval_button = gr.Button("Run evaluation", variant="primary")
 
         # 4. Results (Hidden until run)
