@@ -26,6 +26,7 @@ Model-ConvNeXt-V2-Nano-A1-WOP-81/
 Model-ConvNeXt-V2-Nano-A1-MH-62/
 config.json
 !inference_app/Model-ConvNeXt-V2-Nano-A3-MH/config.json
+inference_app/Dataset.zip
 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 

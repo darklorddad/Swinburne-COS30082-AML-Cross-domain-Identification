@@ -26,7 +26,7 @@ Below is the distribution of the dataset, highlighting the class imbalance and t
 We employ a deep learning approach using **ArcFace (Additive Angular Margin Loss)** combined with a **Class Balanced Sampler**.
 
 1.  **ArcFace**: ArcFace is chosen for its ability to learn highly discriminative features. It encourages the model to learn class-specific features that are robust across the herbarium and field domains (Domain Shift).
-2.  **Class Balanced Sampler**: To address the severe class imbalance in the dataset, we utilise a Class Balanced Sampler during training. This ensures that minority classes are sampled more frequently, preventing the model from being biased towards majority classes.
+2.  **Class Balanced Sampler**: To address the class imbalance in the dataset, we utilise a Class Balanced Sampler during training. This ensures that minority classes are sampled more frequently, preventing the model from being biased towards majority classes.
 
 ### Model Architecture
 The architecture utilises a **ConvNeXt V2 Nano** backbone with an ArcFace head.
@@ -42,7 +42,7 @@ We compared the performance of the Standard model (Cross-Entropy Loss) and the A
 1.  **Standard Classification**: Using the classification head (linear layer).
 2.  **Prototype Retrieval**: Using nearest neighbour search with class prototypes computed from training embeddings.
 
-![Prototype Retrieval Flow](Images/Prototype-Retrieval-Flow.png)
+![Prototype Retrieval Flow](Images\Prototype-retrieval.png)
 
 | Model | Method | MRR | Top-1 Accuracy | Top-5 Accuracy |
 | :--- | :--- | :--- | :--- | :--- |
