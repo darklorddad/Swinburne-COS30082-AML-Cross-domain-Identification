@@ -42,7 +42,7 @@ We compared the performance of the Standard model (Cross-Entropy Loss) and the A
 1.  **Standard Classification**: Using the classification head (linear layer).
 2.  **Prototype Retrieval**: Using nearest neighbour search with class prototypes computed from training embeddings.
 
-![Prototype Retrieval Flow](Images\Prototype-retrieval.png)
+![Prototype Retrieval Flow](Images/Prototype-retrieval.png)
 
 | Model | Method | MRR | Top-1 Accuracy | Top-5 Accuracy |
 | :--- | :--- | :--- | :--- | :--- |
@@ -58,5 +58,5 @@ To evaluate the effectiveness of the embeddings learned by the model, we use t-S
 
 The plots below show the clustering of different plant species, comparing the standard approach (top) with ArcFace (bottom).
 
-![Standard t-SNE](Model-ConvNeXt-V2-Nano-A1-MH-62/t-SNE/tsne_plot.png)
-![ArcFace t-SNE](Model-ConvNeXt-V2-Nano-A3-MH-64/t-SNE/tsne_plot.png)
+![Standard t-SNE](Images/Model-ConvNeXt-V2-Nano-A1-MH-62.png)
+![ArcFace t-SNE](Images/Model-ConvNeXt-V2-Nano-A3-MH-64.png)
