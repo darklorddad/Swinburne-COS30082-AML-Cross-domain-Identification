@@ -10,14 +10,14 @@ import transformers.modeling_outputs
 
 # Patch ImageClassifierOutput to accept pooler_output which some custom models erroneously pass
 # We modify the __init__ in-place so that any reference to the class uses the patched version.
-if not hasattr(transformers.modeling_outputs.ImageClassifierOutput.__init__, "_patched"):
-    _original_init = transformers.modeling_outputs.ImageClassifierOutput.__init__
+# We store the original init on the class to avoid recursion issues during reloads.
+if not hasattr(transformers.modeling_outputs.ImageClassifierOutput, "_original_init_backup"):
+    transformers.modeling_outputs.ImageClassifierOutput._original_init_backup = transformers.modeling_outputs.ImageClassifierOutput.__init__
 
     def _new_init(self, *args, **kwargs):
         kwargs.pop("pooler_output", None)
-        _original_init(self, *args, **kwargs)
+        transformers.modeling_outputs.ImageClassifierOutput._original_init_backup(self, *args, **kwargs)
     
-    _new_init._patched = True
     transformers.modeling_outputs.ImageClassifierOutput.__init__ = _new_init
 
 from PIL import Image
