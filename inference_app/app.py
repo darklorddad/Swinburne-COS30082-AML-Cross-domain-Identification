@@ -2,6 +2,7 @@ import os
 import gradio as gr
 import random
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import transformers
 from transformers import AutoImageProcessor, AutoModelForImageClassification, AutoConfig
@@ -223,7 +224,45 @@ def load_model_generic(source_type, local_path, hf_id, pth_file, pth_arch, pth_c
                 model = timm.create_model(clean_arch, **kwargs)
             except Exception:
                 model = timm.create_model(pth_arch, **kwargs)
-                
+
+            # --- Auto-Adapt Head for Sequential Layers (Fix for fc.0.weight errors) ---
+            # Detect if state_dict has a sequential head (e.g., fc.0.weight) while model has a single layer
+            head_name = None
+            if hasattr(model, 'fc') and isinstance(model.fc, nn.Linear): head_name = 'fc'
+            elif hasattr(model, 'classifier') and isinstance(model.classifier, nn.Linear): head_name = 'classifier'
+            elif hasattr(model, 'head') and isinstance(model.head, nn.Linear): head_name = 'head'
+
+            if head_name:
+                # Check if state_dict contains keys like "fc.0.weight"
+                seq_keys = [k for k in state_dict.keys() if k.startswith(f"{head_name}.0.weight")]
+                if seq_keys and f"{head_name}.weight" not in state_dict:
+                    print(f"Detected Sequential head in .pth for '{head_name}'. Adapting model structure...")
+                    
+                    # Extract dimensions from state_dict
+                    # Layer 0 (First Linear)
+                    w0 = state_dict[f"{head_name}.0.weight"]
+                    in_features = w0.shape[1]
+                    hidden_dim = w0.shape[0]
+                    
+                    # Layer 3 (Final Linear) - assuming standard fastai/fine-tuning structure
+                    # If fc.3 exists, we assume structure: Linear -> ReLU -> Dropout -> Linear
+                    if f"{head_name}.3.weight" in state_dict:
+                        w3 = state_dict[f"{head_name}.3.weight"]
+                        out_features = w3.shape[0]
+                        
+                        new_head = nn.Sequential(
+                            nn.Linear(in_features, hidden_dim),
+                            nn.ReLU(inplace=True),
+                            nn.Dropout(0.5), # Standard default, though exact rate isn't in weights
+                            nn.Linear(hidden_dim, out_features)
+                        )
+                        setattr(model, head_name, new_head)
+                    
+                    # Fallback: If only fc.0 exists (unlikely for this specific error, but possible)
+                    elif f"{head_name}.0.weight" in state_dict and f"{head_name}.1.weight" not in state_dict:
+                         # Just a wrapped linear?
+                         setattr(model, head_name, nn.Sequential(nn.Linear(in_features, hidden_dim)))
+
             model.load_state_dict(state_dict)
             model.eval()
 
@@ -289,11 +328,17 @@ def get_gradcam(model, input_tensor, original_img):
         else:
             try:
                 output = model(**input_tensor)
-            except TypeError:
-                if "pixel_values" in input_tensor:
-                    output = model(input_tensor["pixel_values"])
-                else:
-                    raise
+            except (TypeError, ValueError):
+                try:
+                    if "pixel_values" in input_tensor:
+                        output = model(input_tensor["pixel_values"])
+                    else:
+                        raise
+                except (TypeError, ValueError):
+                    if "pixel_values" in input_tensor:
+                        output = model(input_tensor["pixel_values"], return_dict=False)
+                    else:
+                        output = model(**input_tensor, return_dict=False)
 
         if hasattr(output, "logits"):
             logits = output.logits
@@ -360,16 +405,25 @@ def classify_plant(source_type, local_path, hf_id, pth_file, pth_arch, pth_class
         
         # 1. Prediction (No Grad)
         with torch.no_grad():
-            if "pixel_values" in inputs:
-                try:
+            try:
+                if "pixel_values" in inputs:
+                    try:
+                        outputs = model(**inputs)
+                    except TypeError:
+                        outputs = model(inputs["pixel_values"])
+                else:
                     outputs = model(**inputs)
-                except TypeError:
-                    outputs = model(inputs["pixel_values"])
-            else:
-                outputs = model(**inputs)
+            except TypeError:
+                # Fallback for models with ImageClassifierOutput init issues
+                if "pixel_values" in inputs:
+                    outputs = model(inputs["pixel_values"], return_dict=False)
+                else:
+                    outputs = model(**inputs, return_dict=False)
 
         if hasattr(outputs, "logits"):
             logits = outputs.logits
+        elif isinstance(outputs, tuple):
+            logits = outputs[0]
         else:
             logits = outputs
 
@@ -479,23 +533,45 @@ def extract_features_and_logits(model, processor, batch_images, device, model_ty
             
             # Try to get hidden states
             try:
-                outputs = model(**inputs, output_hidden_states=True)
-            except TypeError:
-                # Model might not support output_hidden_states kwarg or **inputs
-                if "pixel_values" in inputs:
-                    outputs = model(inputs["pixel_values"])
-                else:
-                    outputs = model(**inputs)
+                outputs = model(**inputs, output_hidden_states=True, return_dict=True)
+            except (TypeError, ValueError):
+                # Try return_dict=False to bypass ImageClassifierOutput init errors (e.g. pooler_output issue)
+                try:
+                    outputs = model(**inputs, output_hidden_states=True, return_dict=False)
+                except (TypeError, ValueError):
+                    # Model might not support output_hidden_states kwarg or **inputs
+                    try:
+                        if "pixel_values" in inputs:
+                            # Try passing control args explicitly with pixel_values as kwargs
+                            outputs = model(pixel_values=inputs["pixel_values"], output_hidden_states=True, return_dict=True)
+                        else:
+                            outputs = model(**inputs)
+                    except (TypeError, ValueError) as e:
+                        print(f"Feature extraction attempt failed: {e}")
+                        try:
+                            if "pixel_values" in inputs:
+                                outputs = model(inputs["pixel_values"])
+                            else:
+                                outputs = model(**inputs)
+                        except (TypeError, ValueError):
+                            if "pixel_values" in inputs:
+                                outputs = model(inputs["pixel_values"], return_dict=False)
+                            else:
+                                outputs = model(**inputs, return_dict=False)
 
             # Determine Logits
             if hasattr(outputs, "logits"):
                 logits = outputs.logits
+            elif isinstance(outputs, tuple):
+                logits = outputs[0]
             else:
                 logits = outputs
 
             # Determine Embeddings
             if hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
                 batch_emb_numpy = outputs.pooler_output.cpu().numpy()
+            elif isinstance(outputs, dict) and 'pooler_output' in outputs and outputs['pooler_output'] is not None:
+                batch_emb_numpy = outputs['pooler_output'].cpu().numpy()
             elif hasattr(outputs, 'hidden_states') and outputs.hidden_states:
                 last_hidden = outputs.hidden_states[-1]
                 if last_hidden.dim() == 4:
@@ -504,11 +580,60 @@ def extract_features_and_logits(model, processor, batch_images, device, model_ty
                     batch_emb_numpy = last_hidden.mean(dim=1).cpu().numpy()
                 else:
                     batch_emb_numpy = last_hidden.cpu().numpy()
+            elif isinstance(outputs, dict) and 'hidden_states' in outputs and outputs['hidden_states']:
+                last_hidden = outputs['hidden_states'][-1]
+                if last_hidden.dim() == 4:
+                    batch_emb_numpy = last_hidden.mean(dim=[2, 3]).cpu().numpy()
+                elif last_hidden.dim() == 3:
+                    batch_emb_numpy = last_hidden.mean(dim=1).cpu().numpy()
+                else:
+                    batch_emb_numpy = last_hidden.cpu().numpy()
+            elif isinstance(outputs, tuple) and len(outputs) > 1:
+                # Handle tuple output (logits, hidden_states, ...)
+                possible_hidden = outputs[1]
+                if isinstance(possible_hidden, (tuple, list)) and len(possible_hidden) > 0 and isinstance(possible_hidden[0], torch.Tensor):
+                    last_hidden = possible_hidden[-1]
+                    if last_hidden.dim() == 4:
+                        batch_emb_numpy = last_hidden.mean(dim=[2, 3]).cpu().numpy()
+                    elif last_hidden.dim() == 3:
+                        batch_emb_numpy = last_hidden.mean(dim=1).cpu().numpy()
+                    else:
+                        batch_emb_numpy = last_hidden.cpu().numpy()
+                else:
+                    # Fallback if tuple structure isn't as expected
+                    print("WARNING: Feature extraction failed (tuple output)! Falling back to logits.")
+                    batch_emb_numpy = logits.cpu().numpy() if isinstance(logits, torch.Tensor) else logits
+                    fallback_to_logits = True
             else:
-                # LOUD FAILURE for feature extraction
-                print("WARNING: Feature extraction failed! Model does not return hidden_states or pooler_output. Falling back to logits.")
-                batch_emb_numpy = logits.cpu().numpy()
-                fallback_to_logits = True
+                # Try accessing backbone directly (Custom ArcFace fallback)
+                if hasattr(model, "backbone"):
+                    try:
+                        if "pixel_values" in inputs:
+                            pv = inputs["pixel_values"]
+                        else:
+                            # Try to find tensor in inputs values
+                            pv = next(v for v in inputs.values() if isinstance(v, torch.Tensor))
+                        
+                        # Forward pass through backbone only
+                        features = model.backbone(pv)
+                        
+                        # Apply simple pooling
+                        if features.dim() == 4:
+                            batch_emb_numpy = features.mean(dim=[2, 3]).cpu().numpy()
+                        elif features.dim() == 3:
+                            batch_emb_numpy = features.mean(dim=1).cpu().numpy()
+                        else:
+                            batch_emb_numpy = features.cpu().numpy()
+                            
+                    except Exception as e:
+                        print(f"Backbone fallback failed: {e}")
+                        batch_emb_numpy = None
+
+                if batch_emb_numpy is None:
+                    # LOUD FAILURE for feature extraction
+                    print("WARNING: Feature extraction failed! Model does not return hidden_states or pooler_output. Falling back to logits.")
+                    batch_emb_numpy = logits.cpu().numpy() if isinstance(logits, torch.Tensor) else logits
+                    fallback_to_logits = True
 
         elif model_type == "timm":
             tensors = [processor(img) for img in batch_images]
