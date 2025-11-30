@@ -10,6 +10,11 @@ The dataset is derived from the PlantCLEF 2020 Challenge and consists of 100 spe
 - **Training Data**: A mix of herbarium sheets and field images. Some classes lack field images entirely in the training set.
 - **Test Data**: Exclusively field images.
 
+| Dataset | Herbarium | Field | Total |
+| :--- | :--- | :--- | :--- |
+| **Train** | 3,700 | 1,044 | 4,744 |
+| **Test** | - | 207 | 207 |
+
 ### Dataset Balance
 Below is the distribution of the dataset, highlighting the class imbalance and the proportion of herbarium vs. field images.
 
