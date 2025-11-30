@@ -6,17 +6,16 @@ import torch.nn.functional as F
 import transformers
 from transformers import AutoImageProcessor, AutoModelForImageClassification, AutoConfig
 import transformers.modeling_outputs
-from dataclasses import dataclass
-from typing import Optional
 
 # Patch ImageClassifierOutput to accept pooler_output which some custom models erroneously pass
-@dataclass
-class PatchedImageClassifierOutput(transformers.modeling_outputs.ImageClassifierOutput):
-    pooler_output: Optional[torch.FloatTensor] = None
+# We modify the __init__ in-place so that any reference to the class uses the patched version.
+_original_init = transformers.modeling_outputs.ImageClassifierOutput.__init__
 
-transformers.modeling_outputs.ImageClassifierOutput = PatchedImageClassifierOutput
-if hasattr(transformers, "ImageClassifierOutput"):
-    transformers.ImageClassifierOutput = PatchedImageClassifierOutput
+def _new_init(self, *args, **kwargs):
+    kwargs.pop("pooler_output", None)
+    _original_init(self, *args, **kwargs)
+
+transformers.modeling_outputs.ImageClassifierOutput.__init__ = _new_init
 
 from PIL import Image
 import numpy as np
